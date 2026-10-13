@@ -1,0 +1,209 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  --bg: #f4f4f7;
+  --panel: #ececf1;
+  --surface: #ffffff;
+  --surface-2: #f8f8fb;
+  --hover: #f1f1f6;
+  --border: #e3e3ea;
+  --text: #1c1c22;
+  --muted: #6b6b78;
+  --faint: #9d9daa;
+  --accent: #5b4cf0;
+  --accent-fg: #ffffff;
+  --accent-soft: #ecebff;
+  --danger: #d93a3a;
+  --success: #1f9d61;
+  --warning: #c98a0b;
+  --pin: #e8a10c;
+  --people: #5b4cf0;
+  --notification: #0e8fb4;
+  --newsletter: #c2410c;
+  --shadow: 0 10px 30px rgba(20, 20, 40, 0.14), 0 2px 6px rgba(20, 20, 40, 0.08);
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --bg: #141418;
+  --panel: #18181d;
+  --surface: #1e1e24;
+  --surface-2: #23232a;
+  --hover: #27272f;
+  --border: #2e2e37;
+  --text: #ececf2;
+  --muted: #a0a0ad;
+  --faint: #6e6e7a;
+  --accent: #8d80ff;
+  --accent-fg: #0f0f14;
+  --accent-soft: #2a2650;
+  --danger: #f06262;
+  --success: #3ccf8a;
+  --warning: #f0b43c;
+  --pin: #f5b82e;
+  --people: #9d92ff;
+  --notification: #4cc3e6;
+  --newsletter: #fb8a4c;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-hover: var(--hover);
+  --color-line: var(--border);
+  --color-fg: var(--text);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-pin: var(--pin);
+  --color-people: var(--people);
+  --color-notification: var(--notification);
+  --color-newsletter: var(--newsletter);
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable="true"],
+.selectable {
+  user-select: text;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--muted) 35%, transparent);
+  border-radius: 10px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+button {
+  cursor: default;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.kbd {
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+/* TipTap editor */
+.tiptap {
+  outline: none;
+  min-height: 160px;
+  line-height: 1.55;
+  font-size: 14px;
+}
+.tiptap p {
+  margin: 0 0 0.6em;
+}
+.tiptap ul,
+.tiptap ol {
+  padding-left: 1.4em;
+  margin: 0 0 0.6em;
+}
+.tiptap blockquote {
+  border-left: 3px solid var(--border);
+  margin: 0 0 0.6em;
+  padding-left: 0.8em;
+  color: var(--muted);
+}
+.tiptap a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--faint);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+.tiptap h2 {
+  font-size: 1.15em;
+  font-weight: 600;
+  margin: 0.4em 0;
+}
+.tiptap code {
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  background: var(--surface-2);
+  padding: 0 3px;
+  border-radius: 4px;
+}
+
+.ai-text strong {
+  font-weight: 600;
+}
+.ai-text p {
+  margin: 0 0 0.45em;
+}
+
+@keyframes octo-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.anim-in {
+  animation: octo-in 0.16s ease-out;
+}
+
+/* phone layout: sidebar slides in from the left */
+@keyframes octo-drawer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: none;
+  }
+}
+.anim-drawer {
+  animation: octo-drawer 0.18s ease-out;
+}

@@ -1,0 +1,4 @@
+#!/bin/sh
+# Octopus Mail CLI (development checkout, Linux/macOS). Installed packages ship their own `octo`.
+DIR="$(cd "$(dirname "$0")/.." && pwd)"
+exec node "$DIR/out/cli/octo.js" "$@"

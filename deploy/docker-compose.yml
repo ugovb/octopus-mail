@@ -1,0 +1,19 @@
+# Octopus Mail — serwer domowy (Docker). Uruchom z katalogu głównego repozytorium:
+#   docker compose -f deploy/docker-compose.yml up -d --build
+#   docker compose -f deploy/docker-compose.yml exec octopus octo server pair    ← kod parowania
+services:
+  octopus:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: octopus-mail
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    volumes:
+      - octopus-data:/data
+    environment:
+      TZ: Europe/Warsaw
+
+volumes:
+  octopus-data:

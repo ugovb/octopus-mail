@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Testy (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Zależności
+        run: npm ci
+
+      - name: Kontrola typów
+        run: |
+          npx tsc --noEmit -p tsconfig.node.json
+          npx tsc --noEmit -p tsconfig.web.json
+
+      - name: Build aplikacji i CLI
+        run: npm run build
+
+      - name: Testowy serwer poczty (GreenMail)
+        shell: bash
+        run: |
+          node scripts/greenmail.mjs > greenmail.log 2>&1 &
+          for i in $(seq 1 60); do
+            node -e "require('net').connect(3143,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))" && exit 0
+            sleep 2
+          done
+          cat greenmail.log
+          exit 1
+
+      - name: Testy silnika poczty
+        run: node scripts/run-tests.mjs
+
+      - name: Testy kalendarza
+        run: node --test tests/calendar.test.mjs
+
+      - name: CLI na czystym profilu
+        shell: bash
+        env:
+          OCTO_HOME: ${{ runner.temp }}/octo-ci
+          OCTO_SECRETS: memory
+        run: |
+          node out/cli/octo.js help > /dev/null
+          node out/cli/octo.js accounts --no-sync
+          node out/cli/octo.js status
+
+  home-server:
+    name: Instalator serwera domowego (Linux + systemd)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Build i archiwum serwera
+        run: |
+          npm ci
+          npm run dist:server
+
+      - name: sudo bash install.sh (czysty system)
+        run: |
+          mkdir -p "$RUNNER_TEMP/srv"
+          tar -xzf dist/octopus-mail-server-*.tar.gz -C "$RUNNER_TEMP/srv"
+          cd "$RUNNER_TEMP/srv/octopus-mail-server"
+          sudo OCTO_USER="$USER" bash install.sh | tee install.log
+          grep -E '[A-Z0-9]{4}-[A-Z0-9]{4}' install.log
+
+      - name: Serwer odpowiada i przeżywa restart
+        run: |
+          curl -fsS http://127.0.0.1:8787/api/info
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8787/api/call)" = 401
+          octo server devices
+          sudo systemctl kill -s KILL octopus-mail
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8787/api/info && break; sleep 1; done
+          curl -fsS http://127.0.0.1:8787/api/info
+
+      - name: Aktualizacja i odinstalowanie
+        run: |
+          cd "$RUNNER_TEMP/srv/octopus-mail-server"
+          sudo OCTO_USER="$USER" bash install.sh > /dev/null
+          curl -fsS http://127.0.0.1:8787/api/info
+          sudo bash install.sh --uninstall
+          ! systemctl is-active --quiet octopus-mail
+
+      - name: Log serwera
+        if: failure()
+        run: sudo journalctl -u octopus-mail -n 100 --no-pager

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <rect x="48" y="48" width="928" height="928" rx="232" fill="#5b4cf0"/>
+  <rect x="50" y="50" width="924" height="924" rx="230" fill="none" stroke="#fff" stroke-opacity=".16" stroke-width="4"/>
+  <!-- Four arms behind the letter, four in front: broad curves survive downsampling. -->
+  <g fill="none" stroke-linecap="round">
+    <path d="M354 556C310 626 252 639 226 602M670 556C714 626 772 639 798 602" stroke="#d5cfff" stroke-width="58"/>
+    <path d="M352 494C320 549 244 553 225 515C210 485 234 462 256 473M672 494C704 549 780 553 799 515C814 485 790 462 768 473" stroke="#fff" stroke-width="62"/>
+    <path d="M392 597C388 675 356 732 307 724C280 720 270 700 277 681M632 597C636 675 668 732 717 724C744 720 754 700 747 681M461 621C462 690 455 747 414 774M563 621C562 690 569 747 610 774" stroke="#fff" stroke-width="66"/>
+  </g>
+  <path d="M314 435C314 308 392 224 512 224C632 224 710 308 710 435C710 548 633 624 512 624C391 624 314 548 314 435Z" fill="#fff"/>
+  <g fill="#4535bb">
+    <rect x="421" y="381" width="30" height="43" rx="15"/>
+    <rect x="573" y="381" width="30" height="43" rx="15"/>
+  </g>
+  <path d="M491 438Q512 457 533 438" fill="none" stroke="#4535bb" stroke-width="12" stroke-linecap="round"/>
+  <rect x="359" y="493" width="306" height="170" rx="30" fill="#6554ec"/>
+  <path d="M379 511L492 589Q512 603 532 589L645 511" fill="none" stroke="#fff" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,6 @@
+# keep Unix line endings for everything (shell scripts must run on Linux / Raspberry Pi)
+* text=auto eol=lf
+*.cmd text eol=crlf
+*.png binary
+*.ico binary
+*.bmp binary

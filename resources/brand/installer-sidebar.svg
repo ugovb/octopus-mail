@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="164" height="314" viewBox="0 0 164 314">
+  <rect width="164" height="314" fill="#211a3d"/>
+  <g fill="none" stroke="#8d80ff" stroke-opacity=".22">
+    <circle cx="82" cy="123" r="72"/>
+    <circle cx="82" cy="123" r="102"/>
+    <circle cx="82" cy="123" r="132"/>
+  </g>
+  <!-- The generator replaces this element with the canonical app icon. -->
+  <g id="brand-icon"/>
+  <text x="82" y="205" text-anchor="middle" font-family="Segoe UI, sans-serif" font-weight="600" font-size="18" fill="#ffffff">Octopus Mail</text>
+  <rect x="66" y="222" width="32" height="3" rx="1.5" fill="#8d80ff"/>
+</svg>

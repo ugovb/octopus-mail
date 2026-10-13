@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <!-- A light keyline and dark body keep the silhouette legible on either taskbar. -->
+  <path d="M7 14C7 6 11 3 16 3C21 3 25 6 25 14L28 16Q30 17 30 20Q29 25 25 23Q26 29 22 29Q19 29 19 24L18 22V27Q18 30 16 30Q14 30 14 27V22L13 24Q13 29 10 29Q6 29 7 23Q3 25 2 20Q2 17 4 16Z" fill="#292538" stroke="#f6f4ff" stroke-width="1.6" stroke-linejoin="round"/>
+  <path d="M12 11V12M20 11V12" stroke="#f6f4ff" stroke-width="2.3" stroke-linecap="round"/>
+  <rect x="10" y="16" width="12" height="7" rx="1.4" fill="#f6f4ff"/>
+  <path d="M10.8 16.8L16 20.3L21.2 16.8" fill="none" stroke="#292538" stroke-width="1.2" stroke-linejoin="round"/>
+</svg>

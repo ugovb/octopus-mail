@@ -1,0 +1,24 @@
+# Octopus Mail — serwer domowy (instaluje go deploy/install.sh; znaczniki @…@ uzupełnia instalator)
+[Unit]
+Description=Octopus Mail — serwer domowy
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+Environment=HOME=@HOME@
+Environment=OCTO_SECRETS=server
+Environment=NODE_ENV=production
+ExecStart=@NODE@ @APP@/app/out/cli/octo.js serve --port @PORT@
+Restart=on-failure
+RestartSec=5
+# a little hardening: the server only needs its own data directory
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectControlGroups=true
+
+[Install]
+WantedBy=multi-user.target
