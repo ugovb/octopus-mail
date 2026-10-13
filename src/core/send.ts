@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import fs from 'node:fs'
 import nodemailer from 'nodemailer'
 import MailComposer from 'nodemailer/lib/mail-composer'
+import { dateLocale, t } from '../shared/i18n'
 import type { Address, DraftAttachment } from '../shared/types'
 import { getAccount, smtpTransportOptions } from './accounts'
 import { get, inList, all, now, parseJson, run } from './db'
@@ -9,7 +10,7 @@ import { bus, log } from './events'
 import { record } from './history'
 import { escapeHtml, formatAddress, htmlToText } from './mime'
 import { enqueue } from './ops'
-import { getKV } from './settings'
+import { getKV, getSettings } from './settings'
 import { noteOutgoing } from './smart'
 import { sync } from './sync'
 
@@ -19,7 +20,7 @@ export function newMessageId(fromEmail: string): string {
 }
 
 function fmtDate(ts: number): string {
-  return new Date(ts).toLocaleString('pl-PL', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Warsaw' })
+  return new Date(ts).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short', timeZone: getSettings().timeZone || undefined })
 }
 
 /** Quote block appended to replies/forwards when the draft is turned into MIME. */
@@ -35,12 +36,12 @@ export function buildHistory(draft: Record<string, any>): { html: string; attach
     const to = parseJson<Address[]>(m.to_json, []).map((a) => escapeHtml(formatAddress(a))).join(', ')
     const cc = parseJson<Address[]>(m.cc_json, []).map((a) => escapeHtml(formatAddress(a))).join(', ')
     const header = [
-      '---------- Przekazana wiadomość ----------',
-      `<b>Od:</b> ${from}`,
-      `<b>Data:</b> ${fmtDate(m.date)}`,
-      `<b>Temat:</b> ${escapeHtml(m.subject || '')}`,
-      `<b>Do:</b> ${to}`,
-      cc ? `<b>DW:</b> ${cc}` : '',
+      `---------- ${t('Forwarded message')} ----------`,
+      `<b>${t('From:')}</b> ${from}`,
+      `<b>${t('Date:')}</b> ${fmtDate(m.date)}`,
+      `<b>${t('Subject:')}</b> ${escapeHtml(m.subject || '')}`,
+      `<b>${t('To:')}</b> ${to}`,
+      cc ? `<b>${t('Cc:')}</b> ${cc}` : '',
     ].filter(Boolean).join('<br>')
     const atts = all('SELECT * FROM attachments WHERE message_id = ? AND inline = 0', refId)
     return {
@@ -49,7 +50,7 @@ export function buildHistory(draft: Record<string, any>): { html: string; attach
     }
   }
   return {
-    html: `<div class="octo-quote"><br><p>W dniu ${fmtDate(m.date)} ${from} napisał(a):</p><blockquote type="cite" style="margin:0 0 0 .8ex;border-left:2px solid #ccc;padding-left:1ex">${original}</blockquote></div>`,
+    html: `<div class="octo-quote"><br><p>${t('On {date}, {name} wrote:', { date: fmtDate(m.date), name: from })}</p><blockquote type="cite" style="margin:0 0 0 .8ex;border-left:2px solid #ccc;padding-left:1ex">${original}</blockquote></div>`,
     attachments: [],
   }
 }
@@ -65,7 +66,7 @@ async function resolveAttachments(atts: DraftAttachment[], accountId: number) {
       const file = await sync.get(m.account_id || accountId).downloadAttachment(attId)
       out.push({ filename: a.filename, path: file, contentType: a.mime, cid: a.content_id })
     } else {
-      if (!fs.existsSync(a.path)) throw new Error(`Załącznik nie istnieje: ${a.path}`)
+      if (!fs.existsSync(a.path)) throw new Error(t('Attachment does not exist: {path}', { path: a.path }))
       out.push({ filename: a.filename, path: a.path, contentType: a.mime, cid: a.content_id })
     }
   }
@@ -83,7 +84,7 @@ export async function buildMime(
   opts: { asDraft?: boolean; keepBcc?: boolean; messageId?: string } = {},
 ): Promise<BuiltMessage> {
   const d = get('SELECT * FROM drafts WHERE id = ?', draftId)
-  if (!d) throw new Error(`Wersja robocza ${draftId} nie istnieje`)
+  if (!d) throw new Error(t('Draft {id} does not exist', { id: draftId }))
   const acc = getAccount(d.account_id)
   const to = parseJson<Address[]>(d.to_json, [])
   const cc = parseJson<Address[]>(d.cc_json, [])
@@ -139,7 +140,7 @@ export async function sendDraftNow(draftId: number): Promise<void> {
   const acc = getAccount(claimed.account_id)
   try {
     const built = await buildMime(draftId)
-    if (!built.envelope.to.length) throw new Error('Brak odbiorców')
+    if (!built.envelope.to.length) throw new Error(t('No recipients'))
     const transport = nodemailer.createTransport((await smtpTransportOptions(acc)) as nodemailer.TransportOptions)
     await transport.sendMail({ envelope: built.envelope, raw: built.raw })
     run("UPDATE drafts SET status = 'sent', sent_at = ?, msgid = ?, error = NULL, updated_at = ? WHERE id = ?", now(), built.messageId, now(), draftId)
@@ -176,13 +177,13 @@ export async function sendDraftNow(draftId: number): Promise<void> {
       if (sent) void sync.get(acc.id).syncFolder(sent.id).catch(() => undefined)
     }, 2500)
     bus.emitEvent({ type: 'drafts-changed' })
-    bus.emitEvent({ type: 'toast', level: 'success', message: `Wysłano: ${claimed.subject || '(bez tematu)'}` })
+    bus.emitEvent({ type: 'toast', level: 'success', message: t('Sent: {subject}', { subject: claimed.subject || t('(no subject)') }) })
   } catch (e) {
     const msg = (e as Error).message
     run("UPDATE drafts SET status = 'failed', error = ?, updated_at = ? WHERE id = ?", msg, now(), draftId)
     record(claimed.source || 'ui', 'send', draftId, msg, false)
     bus.emitEvent({ type: 'drafts-changed' })
-    bus.emitEvent({ type: 'toast', level: 'error', message: `Nie wysłano „${claimed.subject || ''}”: ${msg}` })
+    bus.emitEvent({ type: 'toast', level: 'error', message: t('Not sent: “{subject}”: {error}', { subject: claimed.subject || '', error: msg }) })
     throw e
   }
 }
@@ -216,7 +217,8 @@ export function recoverStuckSends(): void {
   const stuck = all<{ id: number }>("SELECT id FROM drafts WHERE status = 'sending' AND updated_at < ?", now() - 10 * 60_000)
   if (stuck.length) {
     run(
-      `UPDATE drafts SET status = 'failed', error = 'Przerwano w trakcie wysyłania — sprawdź folder Wysłane przed ponowną wysyłką' WHERE id IN (${inList(stuck.map((s) => s.id))})`,
+      `UPDATE drafts SET status = 'failed', error = ? WHERE id IN (${inList(stuck.map((s) => s.id))})`,
+      t('Interrupted while sending — check the Sent folder before sending again'),
       ...stuck.map((s) => s.id),
     )
   }

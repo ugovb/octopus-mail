@@ -2,6 +2,7 @@
 // row is updated only after the server accepted the change); local calendars stay local.
 // Invitations (REQUEST/CANCEL) and replies (REPLY) are e-mailed by us for every provider.
 import crypto from 'node:crypto'
+import { t } from '../../shared/i18n'
 import type { Address, EventInput } from '../../shared/types'
 import { myAddresses } from '../accounts'
 import { bus } from '../events'
@@ -19,7 +20,7 @@ import {
 } from './itip'
 import {
   type CalendarOccurrence, type CalRow, deleteEventRow, type EventRow, eventRowByUid, getCalendarRow, getEvent, getEventRow, getSource,
-  isWritable, notifyChanged, READONLY_MSG, resolveWritableCalendar, type SourceRow, upsertEventRow,
+  isWritable, notifyChanged, readonlyMsg, resolveWritableCalendar, type SourceRow, upsertEventRow,
 } from './store'
 import { isValidTz } from './tz'
 
@@ -41,13 +42,13 @@ function parseAttendees(list: (string | Address)[] | undefined | null): Attendee
 function mainOf(ics: string | null, uid: string): EventData {
   const res = ics ? parseResource(ics, uid) : null
   const main = res?.master ?? res?.exceptions[0]?.data
-  if (!main) throw new Error('Nie można odczytać tego wydarzenia (uszkodzone dane ICS).')
+  if (!main) throw new Error(t('Cannot read this event (damaged ICS data).'))
   return main
 }
 
 function rowContext(id: number): { row: EventRow; cal: CalRow; src: SourceRow } {
   const row = getEventRow(id)
-  if (!row) throw new Error('Wydarzenie nie istnieje (mogło zostać usunięte).')
+  if (!row) throw new Error(t('The event does not exist (it may have been deleted).'))
   const cal = getCalendarRow(row.calendar_id)!
   const src = getSource(cal.source_id)!
   return { row, cal, src }
@@ -55,7 +56,7 @@ function rowContext(id: number): { row: EventRow; cal: CalRow; src: SourceRow } 
 
 /** Write a resource to its calendar (server first for CalDAV/Google). Returns the row id. */
 export async function writeResource(cal: CalRow, src: SourceRow, uid: string, ics: string, existing: EventRow | null, retried = false): Promise<number> {
-  if (!isWritable(cal, src)) throw new Error(READONLY_MSG)
+  if (!isWritable(cal, src)) throw new Error(readonlyMsg())
   if (src.kind === 'local') return upsertEventRow(cal.id, ics, { uid, href: null, etag: null })!.id
   const conn = await clientFor(src)
   try {
@@ -72,7 +73,7 @@ export async function writeResource(cal: CalRow, src: SourceRow, uid: string, ic
 }
 
 async function removeResource(cal: CalRow, src: SourceRow, row: EventRow): Promise<void> {
-  if (!isWritable(cal, src)) throw new Error(READONLY_MSG)
+  if (!isWritable(cal, src)) throw new Error(readonlyMsg())
   if (src.kind !== 'local' && row.href) await deleteObject(await clientFor(src), row.href, row.etag)
   deleteEventRow(row.id)
 }
@@ -91,7 +92,7 @@ async function mailAttendees(
   const main = mainOf(ics, uid)
   const sender = senderFor(main.organizer?.email, accountForSource(src))
   if (!sender) {
-    bus.emitEvent({ type: 'toast', level: 'error', message: 'Nie wysłano zaproszeń — brak konta pocztowego.' })
+    bus.emitEvent({ type: 'toast', level: 'error', message: t('Invitations not sent — no mail account.') })
     return
   }
   const shown = opts.recurrenceMs != null ? { ...main, start: opts.recurrenceMs, end: opts.recurrenceMs + (main.end - main.start) } : main
@@ -112,7 +113,9 @@ async function mailAttendees(
     bus.emitEvent({
       type: 'toast',
       level: 'error',
-      message: `Zmiana zapisana w kalendarzu, ale nie wysłano ${method === 'REQUEST' ? 'zaproszeń' : 'odwołania'}: ${msg}`,
+      message: method === 'REQUEST'
+        ? t('Change saved in the calendar, but the invitations were not sent: {error}', { error: msg })
+        : t('Change saved in the calendar, but the cancellation was not sent: {error}', { error: msg }),
     })
   }
 }
@@ -123,18 +126,18 @@ function others(attendees: Attendee[], me: Set<string>, organizer: Address | nul
 
 /** Create an event (default calendar unless calendar_id is given) and invite attendees. */
 export async function createEvent(input: EventInput, actor = 'ui'): Promise<CalendarOccurrence> {
-  if (!Number.isFinite(input.start)) throw new Error('Podaj początek wydarzenia.')
+  if (!Number.isFinite(input.start)) throw new Error(t('Enter the start of the event.'))
   const allDay = !!input.all_day
   const end = Number.isFinite(input.end) ? input.end : input.start + (allDay ? DAY : 3600_000)
-  if (end < input.start) throw new Error('Koniec wydarzenia nie może być przed jego początkiem.')
+  if (end < input.start) throw new Error(t('The event cannot end before it starts.'))
   const target = resolveWritableCalendar(input.calendar_id ?? null)
-  if (!target) throw new Error('Brak kalendarza, w którym można zapisać wydarzenie — dodaj kalendarz w ustawieniach.')
+  if (!target) throw new Error(t('No calendar the event can be saved in — add a calendar in Settings.'))
   const { cal, src } = target
   const attendees = parseAttendees(input.attendees)
   let organizer: Address | null = null
   if (attendees.length) {
     const acc = accountForSource(src)
-    if (!acc) throw new Error('Aby zaprosić uczestników, dodaj najpierw konto pocztowe.')
+    if (!acc) throw new Error(t('To invite guests, add a mail account first.'))
     organizer = { email: acc.email.toLowerCase(), name: acc.name || undefined }
   }
   const uid = crypto.randomUUID()
@@ -172,7 +175,7 @@ export async function updateEvent(
   opts: { occurrence_start?: number | null } = {},
 ): Promise<CalendarOccurrence> {
   const { row, cal, src } = rowContext(id)
-  if (!isWritable(cal, src)) throw new Error(READONLY_MSG)
+  if (!isWritable(cal, src)) throw new Error(readonlyMsg())
   const me = myAddresses()
   const before = mainOf(row.ics, row.uid)
   const amOrganizer = !before.organizer || me.has(before.organizer.email.toLowerCase())
@@ -180,10 +183,10 @@ export async function updateEvent(
   let organizer: Address | null = before.organizer
   if (!organizer && newAttendees?.length) {
     const acc = accountForSource(src)
-    if (!acc) throw new Error('Aby zaprosić uczestników, dodaj najpierw konto pocztowe.')
+    if (!acc) throw new Error(t('To invite guests, add a mail account first.'))
     organizer = { email: acc.email.toLowerCase(), name: acc.name || undefined }
   }
-  if (patch.start !== undefined && patch.end !== undefined && patch.end < patch.start) throw new Error('Koniec wydarzenia nie może być przed jego początkiem.')
+  if (patch.start !== undefined && patch.end !== undefined && patch.end < patch.start) throw new Error(t('The event cannot end before it starts.'))
   const p: EventPatch = {
     summary: patch.summary === undefined ? undefined : patch.summary.trim() || 'Nowe wydarzenie',
     description: patch.description,
@@ -228,7 +231,7 @@ export async function updateEvent(
 /** Delete an event (or one instance with opts.occurrence_start); attendees get a cancellation. */
 export async function deleteEvent(id: number, actor = 'ui', opts: { occurrence_start?: number | null } = {}): Promise<void> {
   const { row, cal, src } = rowContext(id)
-  if (!isWritable(cal, src)) throw new Error(READONLY_MSG)
+  if (!isWritable(cal, src)) throw new Error(readonlyMsg())
   const me = myAddresses()
   const main = mainOf(row.ics, row.uid)
   const amOrganizer = !!main.organizer && me.has(main.organizer.email.toLowerCase())
@@ -249,7 +252,7 @@ export async function deleteEvent(id: number, actor = 'ui', opts: { occurrence_s
 }
 
 export function assertResponse(response: string): asserts response is RsvpResponse {
-  if (!RSVP_RESPONSES.includes(response as RsvpResponse)) throw new Error('Nieprawidłowa odpowiedź — dozwolone: ACCEPTED, TENTATIVE, DECLINED.')
+  if (!RSVP_RESPONSES.includes(response as RsvpResponse)) throw new Error(t('Unknown response — allowed: ACCEPTED, TENTATIVE, DECLINED.'))
 }
 
 /** Answer an invitation that is already in a calendar: update PARTSTAT (server) + e-mail a REPLY. */
@@ -258,14 +261,14 @@ export async function rsvpEvent(eventId: number, response: RsvpResponse, actor =
   const { row, cal, src } = rowContext(eventId)
   const me = myAddresses()
   const main = mainOf(row.ics, row.uid)
-  if (!main.organizer) throw new Error('To wydarzenie nie ma organizatora — nie ma komu wysłać odpowiedzi.')
-  if (me.has(main.organizer.email.toLowerCase())) throw new Error('Jesteś organizatorem tego wydarzenia.')
+  if (!main.organizer) throw new Error(t('This event has no organizer — there is no one to send the response to.'))
+  if (me.has(main.organizer.email.toLowerCase())) throw new Error(t('You are the organizer of this event.'))
   const parsed = parseResource(row.ics || '', row.uid)
   const allAttendees = [main, ...(parsed?.exceptions.map((e) => e.data) ?? [])].flatMap((d) => d.attendees)
   const mine = allAttendees.find((a) => me.has(a.email))
-  if (!mine) throw new Error('Nie jesteś na liście uczestników tego wydarzenia.')
+  if (!mine) throw new Error(t('You are not on the guest list of this event.'))
   const sender = senderFor(mine.email, accountForSource(src))
-  if (!sender) throw new Error('Brak konta pocztowego, z którego można wysłać odpowiedź.')
+  if (!sender) throw new Error(t('No mail account to send the response from.'))
 
   const { ics } = setMyPartstat(row.ics || '', me, response)
   if (isWritable(cal, src)) await writeResource(cal, src, row.uid, ics, row)
@@ -285,7 +288,7 @@ export async function rsvpEvent(eventId: number, response: RsvpResponse, actor =
   } catch (e) {
     record(actor, 'calendar.rsvp', eventId, (e as Error).message, false)
     notifyChanged()
-    throw new Error(`Odpowiedź zapisana w kalendarzu, ale nie wysłano jej do organizatora: ${(e as Error).message}`)
+    throw new Error(t('Response saved in the calendar, but it was not sent to the organizer: {error}', { error: (e as Error).message }))
   }
   record(actor, 'calendar.rsvp', eventId, { response, summary: main.summary, organizer: main.organizer.email })
   notifyChanged()

@@ -1,5 +1,6 @@
 // Calendar sources: Google (OAuth account), CalDAV (iCloud, Fastmail, Nextcloud…),
 // ICS subscriptions (read-only) and the local calendar.
+import { t } from '../../shared/i18n'
 import { findAccount, getAccount, listAccounts } from '../accounts'
 import { all, get, insert, now, run, tx } from '../db'
 import { log } from '../events'
@@ -34,7 +35,8 @@ export interface CalendarSourceInfo {
   created_at: number
 }
 
-export const LOCAL_CALENDAR_NAME = 'Mój kalendarz'
+/** Name of the calendar on this computer (stored when it is created). */
+export const localCalendarName = (): string => t('My calendar')
 
 export function listCalendarSources(): CalendarSourceInfo[] {
   return all<SourceRow & { n: number }>(
@@ -73,7 +75,7 @@ export function caldavServerFor(url: string | undefined, username: string | unde
   try {
     return { url: new URL(full).href, label: new URL(full).hostname }
   } catch {
-    throw new Error('Nieprawidłowy adres serwera CalDAV.')
+    throw new Error(t('This CalDAV server address is not valid.'))
   }
 }
 
@@ -86,7 +88,7 @@ function addLocal(name?: string): number {
         'INSERT INTO calendars(source_id, remote_url, name, color, readonly, enabled, is_default) VALUES (?, ?, ?, ?, 0, 1, 0)',
         existing.id,
         'local:default',
-        LOCAL_CALENDAR_NAME,
+        localCalendarName(),
         DEFAULT_COLOR,
       )
       ensureDefaultCalendar()
@@ -94,11 +96,11 @@ function addLocal(name?: string): number {
     return existing.id
   }
   return tx(() => {
-    const id = insert('cal_sources', { kind: 'local', name: name?.trim() || 'Na tym komputerze', enabled: 1, created_at: now() })
+    const id = insert('cal_sources', { kind: 'local', name: name?.trim() || t('On this computer'), enabled: 1, created_at: now() })
     const calId = insert('calendars', {
       source_id: id,
       remote_url: 'local:default',
-      name: LOCAL_CALENDAR_NAME,
+      name: localCalendarName(),
       color: DEFAULT_COLOR,
       readonly: 0,
       enabled: 1,
@@ -110,12 +112,12 @@ function addLocal(name?: string): number {
 }
 
 async function addGoogle(input: CalendarSourceInput): Promise<number> {
-  if (!input.accountId) throw new Error('Wybierz konto Google, którego kalendarz chcesz dodać.')
+  if (!input.accountId) throw new Error(t('Choose the Google account whose calendar you want to add.'))
   const acc = getAccount(input.accountId)
-  if (acc.auth !== 'oauth-google') throw new Error('Kalendarz Google wymaga konta Google zalogowanego przez OAuth (Ustawienia → Konta).')
+  if (acc.auth !== 'oauth-google') throw new Error(t('Google Calendar needs a Google account signed in with OAuth (Settings → Accounts).'))
   const existing = get<{ id: number }>("SELECT id FROM cal_sources WHERE kind = 'google' AND account_id = ?", acc.id)
   if (existing) return existing.id
-  await getAccessToken(acc.id) // fails early (Polish message) when the account has no usable token
+  await getAccessToken(acc.id) // fails early (message in the UI language) when the account has no usable token
   const id = insert('cal_sources', { account_id: acc.id, kind: 'google', url: GOOGLE_CALDAV, username: acc.email, name: input.name?.trim() || `Google (${acc.email})`, enabled: 1, created_at: now() })
   try {
     const src = getSource(id)!
@@ -131,13 +133,13 @@ async function addGoogle(input: CalendarSourceInput): Promise<number> {
 
 async function addCaldav(input: CalendarSourceInput): Promise<number> {
   const server = caldavServerFor(input.url, input.username)
-  if (!server) throw new Error('Podaj adres serwera CalDAV (np. https://serwer/remote.php/dav dla Nextcloud).')
+  if (!server) throw new Error(t('Enter the CalDAV server address (e.g. https://server/remote.php/dav for Nextcloud).'))
   const username = (input.username || '').trim()
   const password = input.password || ''
-  if (!username) throw new Error('Podaj nazwę użytkownika (zwykle adres e-mail).')
-  if (!password) throw new Error('Podaj hasło (dla iCloud: hasło dla aplikacji z appleid.apple.com).')
+  if (!username) throw new Error(t('Enter the username (usually the email address).'))
+  if (!password) throw new Error(t('Enter the password (for iCloud: an app-specific password from appleid.apple.com).'))
   if (get("SELECT 1 FROM cal_sources WHERE kind = 'caldav' AND url = ? AND username = ? COLLATE NOCASE", server.url, username)) {
-    throw new Error(`Kalendarz ${username} na ${server.label} jest już dodany.`)
+    throw new Error(t('Calendar {username} on {server} has already been added.', { username, server: server.label }))
   }
   const client = await connectDav({ serverUrl: server.url, username, password })
   const accountId = input.accountId ?? findAccount(username)?.id ?? null
@@ -153,11 +155,11 @@ async function addCaldav(input: CalendarSourceInput): Promise<number> {
   try {
     const src = getSource(id)!
     const remote = await listRemoteCalendars(src, { client, key: '', at: Date.now(), primaryOnly: false })
-    if (!remote.length) throw new Error('Na tym koncie nie znaleziono żadnych kalendarzy z wydarzeniami.')
+    if (!remote.length) throw new Error(t('No calendars with events were found on this account.'))
     try {
       setSecret(calSourceSecretKey(id), password)
     } catch (e) {
-      throw new Error(`Nie udało się zapisać hasła ${secretStoreName()}: ${(e as Error).message}`)
+      throw new Error(t('Could not save the password {where}: {error}', { where: secretStoreName(), error: (e as Error).message }))
     }
     upsertRemoteCalendars(src, remote)
   } catch (e) {
@@ -169,7 +171,7 @@ async function addCaldav(input: CalendarSourceInput): Promise<number> {
 }
 
 async function addIcs(input: CalendarSourceInput): Promise<number> {
-  if (!input.url?.trim()) throw new Error('Podaj adres subskrypcji kalendarza (link .ics lub webcal://).')
+  if (!input.url?.trim()) throw new Error(t('Enter the calendar subscription address (an .ics or webcal:// link).'))
   const url = normalizeFeedUrl(input.url)
   const existing = get<{ id: number }>("SELECT id FROM cal_sources WHERE kind = 'ics' AND url = ?", url)
   if (existing) return existing.id
@@ -217,7 +219,7 @@ export async function addCalendarSource(input: CalendarSourceInput): Promise<num
       id = await addIcs(input)
       break
     default:
-      throw new Error(`Nieznany rodzaj kalendarza: ${String((input as { kind?: unknown }).kind)}`)
+      throw new Error(t('Unknown calendar type: {kind}', { kind: String((input as { kind?: unknown }).kind) }))
   }
   const src = getSource(id)!
   record('ui', 'calendar.source-add', id, { kind: src.kind, name: src.name })
@@ -228,7 +230,7 @@ export async function addCalendarSource(input: CalendarSourceInput): Promise<num
 
 export function removeCalendarSource(id: number): void {
   const src = getSource(id)
-  if (!src) throw new Error(`Nie ma źródła kalendarza o id ${id}`)
+  if (!src) throw new Error(t('No calendar source with id {id}', { id }))
   run('DELETE FROM cal_sources WHERE id = ?', id)
   if (src.kind === 'caldav') deleteSecret(calSourceSecretKey(id))
   dropClient(id)

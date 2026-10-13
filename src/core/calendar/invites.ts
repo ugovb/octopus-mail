@@ -1,4 +1,5 @@
 // Calendar invitations received by e-mail (messages.calendar_part): parse, answer, apply cancellations.
+import { t } from '../../shared/i18n'
 import type { Address } from '../../shared/types'
 import { getAccount, listIdentities, myAddresses } from '../accounts'
 import { get } from '../db'
@@ -39,7 +40,7 @@ const icsCache = new Map<number, string>()
 
 async function loadInvite(messageId: number): Promise<{ m: { id: number; account_id: number; calendar_part: string | null }; ics: string } | null> {
   const m = get<{ id: number; account_id: number; calendar_part: string | null }>('SELECT id, account_id, calendar_part FROM messages WHERE id = ?', messageId)
-  if (!m) throw new Error('Wiadomość nie istnieje.')
+  if (!m) throw new Error(t('Message does not exist.'))
   if (!m.calendar_part) return null
   let ics = icsCache.get(messageId)
   if (!ics) {
@@ -107,15 +108,15 @@ export async function rsvpInvite(messageId: number, response: RsvpResponse, opts
   assertResponse(response)
   const actor = opts.actor || 'ui'
   const loaded = await loadInvite(messageId)
-  if (!loaded) throw new Error('Ta wiadomość nie zawiera zaproszenia.')
+  if (!loaded) throw new Error(t('This message contains no invitation.'))
   const { m, ics } = loaded
   const meSet = myAddresses()
   const info = parseInviteIcs(ics, meSet)
-  if (!info) throw new Error('Nie udało się odczytać zaproszenia.')
+  if (!info) throw new Error(t('Could not read the invitation.'))
   if (info.method !== 'REQUEST') {
-    throw new Error(info.method === 'CANCEL' ? 'To wydarzenie zostało odwołane — nie można na nie odpowiedzieć.' : 'Na tę wiadomość nie można odpowiedzieć (to nie jest zaproszenie).')
+    throw new Error(info.method === 'CANCEL' ? t('This event has been cancelled — you cannot respond to it.') : t('You cannot respond to this message (it is not an invitation).'))
   }
-  if (!info.organizer) throw new Error('Zaproszenie nie ma organizatora — nie ma komu wysłać odpowiedzi.')
+  if (!info.organizer) throw new Error(t('The invitation has no organizer — there is no one to send the response to.'))
   const me = myInviteAddress(info, m.account_id, meSet)
   const sender = senderFor(me.email, getAccount(m.account_id))!
   if (sender.account.id !== m.account_id) {
@@ -141,7 +142,7 @@ export async function rsvpInvite(messageId: number, response: RsvpResponse, opts
   } catch (e) {
     const msg = (e as Error).message
     log('calendar', 'storing accepted invitation failed:', msg)
-    bus.emitEvent({ type: 'toast', level: 'error', message: `Odpowiedź wysłana, ale nie zapisano wydarzenia w kalendarzu: ${msg}` })
+    bus.emitEvent({ type: 'toast', level: 'error', message: t('Response sent, but the event was not saved in the calendar: {error}', { error: msg }) })
   }
   notifyChanged()
 }
@@ -168,7 +169,7 @@ export async function applyInviteCancel(messageId: number, actor = 'ui'): Promis
   const loaded = await loadInvite(messageId)
   if (!loaded) return false
   const info = parseInviteIcs(loaded.ics, myAddresses())
-  if (!info || info.method !== 'CANCEL') throw new Error('Ta wiadomość nie odwołuje wydarzenia.')
+  if (!info || info.method !== 'CANCEL') throw new Error(t('This message does not cancel an event.'))
   const ex = existingByUid(info.uid)
   if (!ex) return false
   await deleteEvent(ex.id, actor, { occurrence_start: info.recurrence_id })

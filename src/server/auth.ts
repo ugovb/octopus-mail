@@ -3,6 +3,7 @@
 import crypto from 'node:crypto'
 import { now } from '../core/db'
 import { getKV, setKV } from '../core/settings'
+import { t } from '../shared/i18n'
 
 export interface Device {
   id: string
@@ -55,7 +56,7 @@ export function redeemPairingCode(code: string, deviceName: string, ip: string |
   const token = `octo_${crypto.randomBytes(32).toString('base64url')}`
   const device: Device = {
     id: crypto.randomBytes(6).toString('hex'),
-    name: (hit.name || deviceName || 'Urządzenie').slice(0, 80),
+    name: (hit.name || deviceName || t('Device')).slice(0, 80),
     tokenHash: sha(token),
     createdAt: now(),
     lastSeen: now(),

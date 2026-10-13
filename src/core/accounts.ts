@@ -1,5 +1,6 @@
 import { ImapFlow, type ImapFlowOptions } from 'imapflow'
 import nodemailer from 'nodemailer'
+import { t } from '../shared/i18n'
 import type { Account, AccountInput, AgentAccess, AuthKind } from '../shared/types'
 import { all, get, insert, now, run, type Row, update } from './db'
 import { bus } from './events'
@@ -42,7 +43,7 @@ export function listAccounts(includeDisabled = true): Account[] {
 
 export function getAccount(id: number): Account {
   const r = get('SELECT * FROM accounts WHERE id = ?', id)
-  if (!r) throw new Error(`Nie ma konta o id ${id}`)
+  if (!r) throw new Error(t('No account with id {id}', { id }))
   return rowToAccount(r)
 }
 
@@ -64,7 +65,7 @@ export function findAccount(ref: string | number): Account | null {
 export async function imapAuth(acc: Account): Promise<ImapFlowOptions['auth']> {
   if (acc.auth === 'password') {
     const pass = getSecret(accountSecretKey(acc.id))
-    if (!pass) throw new Error(`Brak zapisanego hasła dla ${acc.email}`)
+    if (!pass) throw new Error(t('No saved password for {email}', { email: acc.email }))
     return { user: acc.username, pass }
   }
   return { user: acc.username, accessToken: await getAccessToken(acc.id) }
@@ -73,7 +74,7 @@ export async function imapAuth(acc: Account): Promise<ImapFlowOptions['auth']> {
 export async function smtpAuth(acc: Account): Promise<Record<string, unknown>> {
   if (acc.auth === 'password') {
     const pass = getSecret(accountSecretKey(acc.id))
-    if (!pass) throw new Error(`Brak zapisanego hasła dla ${acc.email}`)
+    if (!pass) throw new Error(t('No saved password for {email}', { email: acc.email }))
     return { user: acc.username, pass }
   }
   return { type: 'OAuth2', user: acc.username, accessToken: await getAccessToken(acc.id) }
@@ -139,7 +140,7 @@ export async function testConnection(cfg: {
     result.is_gmail = client.capabilities.has('X-GM-EXT-1')
   } catch (e) {
     const err = e as Error & { responseText?: string; authenticationFailed?: boolean }
-    result.error = `IMAP: ${err.authenticationFailed ? 'błędny login lub hasło' : err.responseText || err.message}`
+    result.error = `IMAP: ${err.authenticationFailed ? t('wrong username or password') : err.responseText || err.message}`
     return result
   } finally {
     try { await client.logout() } catch { /* ignore */ }
@@ -169,7 +170,7 @@ export async function addAccount(
   input: AccountInput & { oauthTokens?: OAuthTokens; skipTest?: boolean },
 ): Promise<Account> {
   const email = input.email.trim().toLowerCase()
-  if (findAccount(email)) throw new Error(`Konto ${email} już istnieje`)
+  if (findAccount(email)) throw new Error(t('Account {email} already exists', { email }))
   let cfg = input.imap_host ? null : await discover(email)
   if (input.provider && PRESETS[input.provider] && !input.imap_host) cfg = { ...PRESETS[input.provider] }
   const merged = {
@@ -180,20 +181,20 @@ export async function addAccount(
     smtp_port: input.smtp_port ?? cfg?.smtp_port ?? 465,
     smtp_secure: input.smtp_secure ?? cfg?.smtp_secure ?? true,
   }
-  if (!merged.imap_host || !merged.smtp_host) throw new Error('Podaj adresy serwerów IMAP i SMTP.')
+  if (!merged.imap_host || !merged.smtp_host) throw new Error(t('Enter the IMAP and SMTP server addresses.'))
   const auth: AuthKind = input.auth || (input.oauthTokens ? (input.oauthTokens.provider === 'google' ? 'oauth-google' : 'oauth-microsoft') : 'password')
   const username = input.username || email
 
   let isGmail = !!cfg?.is_gmail
   if (!input.skipTest) {
-    const t = await testConnection({
+    const test = await testConnection({
       ...merged,
       username,
       password: input.password,
       accessToken: input.oauthTokens?.access_token,
     })
-    if (!t.ok) throw new Error(t.error || 'Nie udało się połączyć')
-    isGmail = isGmail || !!t.is_gmail
+    if (!test.ok) throw new Error(test.error || t('Could not connect'))
+    isGmail = isGmail || !!test.is_gmail
   }
 
   const count = (get('SELECT COUNT(*) n FROM accounts') as Row).n as number

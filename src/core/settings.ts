@@ -5,7 +5,7 @@ import { bus } from './events'
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
   density: 'comfortable',
-  language: 'pl',
+  language: 'auto',
   smartInbox: true,
   groupNewsletters: true,
   groupNotifications: true,
@@ -33,7 +33,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   snoozeEveningHour: 18,
   weekStartsOn: 1,
   defaultAccountId: null,
-  timeZone: 'Europe/Warsaw',
+  // this machine's zone (a home server should have its zone set: timedatectl / TZ)
+  timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
   swipeLeft: 'archive',
   swipeRight: 'pin',
   conversationOrder: 'newest-bottom',

@@ -2,6 +2,7 @@
 // alive (desktop app or `octo`) claims and executes it. Local state is updated optimistically
 // when the op is enqueued, so the UI reacts instantly and Undo can simply cancel a pending op.
 import crypto from 'node:crypto'
+import { t } from '../shared/i18n'
 import type { FolderRole } from '../shared/types'
 import { all, get, inList, insert, now, parseJson, type Row, run, tx } from './db'
 import { bus, log } from './events'
@@ -104,7 +105,7 @@ export async function processOps(): Promise<number> {
         if (op.attempts >= MAX_ATTEMPTS || /nie istnieje|not found|does not exist/i.test(msg)) {
           run("UPDATE ops SET status = 'error', error = ?, finished_at = ? WHERE id = ?", msg, now(), op.id)
           revertLocal(parseJson<OpPayload>(op.payload, {}))
-          bus.emitEvent({ type: 'toast', level: 'error', message: `Operacja nie powiodła się: ${msg}` })
+          bus.emitEvent({ type: 'toast', level: 'error', message: t('Operation failed: {error}', { error: msg }) })
           bus.emitEvent({ type: 'mailbox-changed' })
         } else {
           const backoff = Math.min(60_000 * 2 ** (op.attempts - 1), 30 * 60_000)
@@ -154,10 +155,10 @@ function messagesByFolder(ids: number[]): Map<number, Row[]> {
 async function resolveTarget(accountId: number, p: OpPayload): Promise<Row> {
   if (p.toFolderId) {
     const f = get('SELECT * FROM folders WHERE id = ?', p.toFolderId)
-    if (!f) throw new Error('Folder docelowy nie istnieje')
+    if (!f) throw new Error(t('Target folder does not exist'))
     return f
   }
-  if (!p.toRole) throw new Error('Brak folderu docelowego')
+  if (!p.toRole) throw new Error(t('No target folder'))
   let f = get('SELECT * FROM folders WHERE account_id = ? AND role = ? ORDER BY id LIMIT 1', accountId, p.toRole)
   if (!f && (p.toRole === 'archive' || p.toRole === 'blocked')) {
     const acc = sync.get(accountId)
@@ -168,7 +169,7 @@ async function resolveTarget(accountId: number, p: OpPayload): Promise<Row> {
     run('UPDATE folders SET role = ? WHERE account_id = ? AND path = ?', p.toRole, accountId, created)
     f = get('SELECT * FROM folders WHERE account_id = ? AND path = ?', accountId, created)
   }
-  if (!f) throw new Error(`Konto nie ma folderu „${p.toRole}”`)
+  if (!f) throw new Error(t('The account has no “{role}” folder', { role: p.toRole }))
   return f
 }
 
@@ -273,6 +274,6 @@ async function execute(op: Row): Promise<void> {
       return
     }
     default:
-      throw new Error(`Nieznana operacja ${op.kind}`)
+      throw new Error(t('Unknown operation {kind}', { kind: op.kind }))
   }
 }

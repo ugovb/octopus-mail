@@ -1,5 +1,6 @@
 // LLM access: local Ollama by default, Anthropic Claude when the user adds an API key.
 import Anthropic from '@anthropic-ai/sdk'
+import { t } from '../../shared/i18n'
 import type { AiResult } from '../../shared/types'
 import { claudeKeyName, getSecret, setSecret, deleteSecret } from '../secrets'
 import { getSettings } from '../settings'
@@ -21,12 +22,14 @@ export interface CompleteOptions {
   provider?: 'ollama' | 'claude'
 }
 
-export const CLAUDE_MODELS = [
-  { id: 'claude-opus-5-5', label: 'Claude Opus 5.5 (domyślny, najlepszy)' },
-  { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 (szybszy, tańszy)' },
-  { id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5 (najtańszy)' },
-  { id: 'claude-fable-5-1', label: 'Claude Fable 5.1 (najmocniejszy, najdroższy)' },
-]
+export function claudeModels(): { id: string; label: string }[] {
+  return [
+    { id: 'claude-opus-5-5', label: `Claude Opus 5.5 (${t('default, best')})` },
+    { id: 'claude-sonnet-5-5', label: `Claude Sonnet 5.5 (${t('faster, cheaper')})` },
+    { id: 'claude-haiku-5-5', label: `Claude Haiku 5.5 (${t('cheapest')})` },
+    { id: 'claude-fable-5-1', label: `Claude Fable 5.1 (${t('most capable, most expensive')})` },
+  ]
+}
 
 export function setClaudeKey(key: string | null): void {
   if (key) setSecret(claudeKeyName, key.trim())
@@ -39,7 +42,7 @@ export function hasClaudeKey(): boolean {
 
 function claudeClient(): Anthropic {
   const key = getSecret(claudeKeyName) || process.env.ANTHROPIC_API_KEY
-  if (!key) throw new Error('Brak klucza Claude API — dodaj go w Ustawienia → AI.')
+  if (!key) throw new Error(t('No Claude API key — add it in Settings → AI.'))
   return new Anthropic({ apiKey: key })
 }
 
@@ -49,7 +52,7 @@ export function activeProvider(): 'ollama' | 'claude' | 'off' {
 
 export async function complete(opts: CompleteOptions): Promise<AiResult> {
   const provider = opts.provider || activeProvider()
-  if (provider === 'off') throw new Error('Funkcje AI są wyłączone (Ustawienia → AI).')
+  if (provider === 'off') throw new Error(t('AI features are turned off (Settings → AI).'))
   return provider === 'claude' ? completeClaude(opts) : completeOllama(opts)
 }
 
@@ -70,18 +73,18 @@ async function completeClaude(opts: CompleteOptions): Promise<AiResult> {
   try {
     if (opts.onDelta) {
       const stream = client.beta.messages.stream(params, { signal: opts.signal })
-      stream.on('text', (t) => opts.onDelta!(t))
+      stream.on('text', (delta) => opts.onDelta!(delta))
       message = await stream.finalMessage()
     } else {
       message = await client.beta.messages.create(params, { signal: opts.signal })
     }
   } catch (e) {
-    if (e instanceof Anthropic.AuthenticationError) throw new Error('Nieprawidłowy klucz Claude API.')
-    if (e instanceof Anthropic.RateLimitError) throw new Error('Limit zapytań Claude API — spróbuj za chwilę.')
+    if (e instanceof Anthropic.AuthenticationError) throw new Error(t('Invalid Claude API key.'))
+    if (e instanceof Anthropic.RateLimitError) throw new Error(t('Claude API rate limit reached — try again in a moment.'))
     if (e instanceof Anthropic.APIError) throw new Error(`Claude API (${e.status}): ${e.message}`)
     throw e
   }
-  if (message.stop_reason === 'refusal') throw new Error('Model odmówił wykonania tego zadania.')
+  if (message.stop_reason === 'refusal') throw new Error(t('The model declined to do this task.'))
   const text = message.content
     .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text')
     .map((b) => b.text)
@@ -106,7 +109,7 @@ async function completeOllama(opts: CompleteOptions): Promise<AiResult> {
   const base = s.ollamaUrl.replace(/\/$/, '')
   let model = s.ollamaModel
   const installed = await ollamaModels()
-  if (!installed.length) throw new Error(`Ollama nie odpowiada pod ${base}. Uruchom Ollamę albo przełącz AI na Claude.`)
+  if (!installed.length) throw new Error(t('Ollama is not responding at {url}. Start Ollama or switch AI to Claude.', { url: base }))
   if (!installed.some((m) => m.name === model)) {
     const pick = installed.find((m) => /gemma3:12b|qwen3:8b|qwen3\.5|gemma/.test(m.name)) || installed[0]
     model = pick.name

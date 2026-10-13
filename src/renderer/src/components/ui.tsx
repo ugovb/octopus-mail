@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { create } from 'zustand'
 import type { Address } from '../../../shared/types'
 import { colorFor, displayName, initials } from '../lib/format'
+import { t } from '../../../shared/i18n'
 
 export function cx(...c: (string | false | null | undefined)[]): string {
   return c.filter(Boolean).join(' ')
@@ -84,7 +85,7 @@ export function Modal({
         {title !== undefined && (
           <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
             <div className="text-[15px] font-semibold">{title}</div>
-            <IconButton onClick={onClose} aria-label="Zamknij">
+            <IconButton onClick={onClose} aria-label={t('Close')}>
               <X size={16} />
             </IconButton>
           </div>
@@ -245,7 +246,7 @@ export function PromptHost() {
   }
   return (
     <Modal open={!!req} onClose={() => close(null)} title={req?.title} width={440}
-      footer={<><Button variant="ghost" onClick={() => close(null)}>Anuluj</Button><Button variant="primary" onClick={() => close(v.trim() || null)}>OK</Button></>}>
+      footer={<><Button variant="ghost" onClick={() => close(null)}>{t('Cancel')}</Button><Button variant="primary" onClick={() => close(v.trim() || null)}>OK</Button></>}>
       <div className="p-5">
         <input autoFocus className={inputCls} value={v} placeholder={req?.placeholder} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && close(v.trim() || null)} />
       </div>

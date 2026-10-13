@@ -1,6 +1,7 @@
 // Every user-facing e-mail action. Each one updates local state immediately, queues the IMAP work
 // with a short delay and returns an undo token; Undo cancels the queued work and restores state.
 import crypto from 'node:crypto'
+import { dateLocale, t, tp } from '../shared/i18n'
 import type { Category, FolderRole } from '../shared/types'
 import { getAccount } from './accounts'
 import { all, get, inList, now, type Row, run, tx } from './db'
@@ -132,7 +133,7 @@ function setFlag(rows: Row[], flag: '\\Seen' | '\\Flagged', on: boolean, actor: 
 
 /** Done / Archive: remove from Inbox (Gmail: drop the Inbox label). */
 export function archive(threadIds: number[], actor: Actor = 'ui'): ActionResult {
-  const entry = snapshot(threadIds, threadIds.length > 1 ? `Zrobione: ${threadIds.length}` : 'Zrobione')
+  const entry = snapshot(threadIds, threadIds.length > 1 ? t('Done: {n}', { n: threadIds.length }) : t('Done'))
   const rows = threadMessageIds(threadIds, ['inbox'])
   moveMessages(rows, { toRole: 'archive' }, actor, entry)
   run(`UPDATE threads SET resurfaced_at = NULL, snoozed_until = NULL, done_at = ?, set_aside = 0 WHERE id IN (${inList(threadIds)})`, now(), ...threadIds)
@@ -142,7 +143,7 @@ export function archive(threadIds: number[], actor: Actor = 'ui'): ActionResult 
 }
 
 export function moveToInbox(threadIds: number[], actor: Actor = 'ui'): ActionResult {
-  const entry = snapshot(threadIds, 'Przeniesiono do Odebranych')
+  const entry = snapshot(threadIds, t('Moved to Inbox'))
   const rows = threadMessageIds(threadIds, undefined, ['inbox', 'sent', 'drafts'])
   const latestPerThread = new Map<number, Row>()
   for (const r of rows) if (!r.is_outgoing) latestPerThread.set(r.thread_id, r)
@@ -160,7 +161,7 @@ export function moveToInbox(threadIds: number[], actor: Actor = 'ui'): ActionRes
 }
 
 export function trash(threadIds: number[], actor: Actor = 'ui'): ActionResult {
-  const entry = snapshot(threadIds, 'Przeniesiono do kosza')
+  const entry = snapshot(threadIds, t('Moved to Trash'))
   const rows = threadMessageIds(threadIds, undefined, ['trash', 'drafts'])
   moveMessages(rows, { toRole: 'trash' }, actor, entry)
   run(`UPDATE threads SET resurfaced_at = NULL, snoozed_until = NULL, pinned = 0 WHERE id IN (${inList(threadIds)})`, ...threadIds)
@@ -170,7 +171,7 @@ export function trash(threadIds: number[], actor: Actor = 'ui'): ActionResult {
 
 /** Permanently delete (only messages already in Trash/Spam). */
 export function deleteForever(threadIds: number[], actor: Actor = 'ui'): ActionResult {
-  const entry = snapshot(threadIds, 'Usunięto na zawsze')
+  const entry = snapshot(threadIds, t('Deleted forever'))
   const rows = threadMessageIds(threadIds, ['trash', 'junk', 'blocked'])
   for (const [accountId, list] of groupByAccount(rows)) {
     const ids = list.map((r) => r.id)
@@ -182,7 +183,7 @@ export function deleteForever(threadIds: number[], actor: Actor = 'ui'): ActionR
 }
 
 export function spam(threadIds: number[], actor: Actor = 'ui'): ActionResult {
-  const entry = snapshot(threadIds, 'Oznaczono jako spam')
+  const entry = snapshot(threadIds, t('Marked as spam'))
   const rows = threadMessageIds(threadIds, undefined, ['junk', 'sent', 'drafts', 'trash'])
   moveMessages(rows.filter((r) => !r.is_outgoing), { toRole: 'junk' }, actor, entry)
   record(actor, 'spam', threadIds.join(','))
@@ -190,7 +191,7 @@ export function spam(threadIds: number[], actor: Actor = 'ui'): ActionResult {
 }
 
 export function notSpam(threadIds: number[], actor: Actor = 'ui'): ActionResult {
-  const entry = snapshot(threadIds, 'To nie spam')
+  const entry = snapshot(threadIds, t('Marked as not spam'))
   moveMessages(threadMessageIds(threadIds, ['junk']), { toRole: 'inbox' }, actor, entry)
   record(actor, 'not-spam', threadIds.join(','))
   return finish(entry, threadIds.length)
@@ -198,8 +199,8 @@ export function notSpam(threadIds: number[], actor: Actor = 'ui'): ActionResult 
 
 export function moveToFolder(threadIds: number[], folderId: number, actor: Actor = 'ui', fromFolderIds?: number[]): ActionResult {
   const target = get('SELECT * FROM folders WHERE id = ?', folderId)
-  if (!target) throw new Error('Folder nie istnieje')
-  const entry = snapshot(threadIds, `Przeniesiono do: ${target.name}`)
+  if (!target) throw new Error(t('Folder does not exist'))
+  const entry = snapshot(threadIds, t('Moved to “{folder}”', { folder: target.name }))
   let rows = threadMessageIds(threadIds, undefined, ['sent', 'drafts'])
   if (fromFolderIds?.length) rows = rows.filter((r) => fromFolderIds.includes(r.folder_id))
   rows = rows.filter((r) => r.account_id === target.account_id && r.folder_id !== folderId)
@@ -211,8 +212,8 @@ export function moveToFolder(threadIds: number[], folderId: number, actor: Actor
 
 export function copyToFolder(threadIds: number[], folderId: number, actor: Actor = 'ui'): ActionResult {
   const target = get('SELECT * FROM folders WHERE id = ?', folderId)
-  if (!target) throw new Error('Folder nie istnieje')
-  const entry = snapshot(threadIds, `Skopiowano do: ${target.name}`)
+  if (!target) throw new Error(t('Folder does not exist'))
+  const entry = snapshot(threadIds, t('Copied to “{folder}”', { folder: target.name }))
   const rows = threadMessageIds(threadIds, undefined, ['trash', 'junk']).filter((r) => r.account_id === target.account_id)
   moveMessages(rows, { toFolderId: folderId }, actor, entry, true)
   record(actor, 'copy', threadIds.join(','), { folder: target.path })
@@ -221,7 +222,7 @@ export function copyToFolder(threadIds: number[], folderId: number, actor: Actor
 
 /** Gmail labels. */
 export function setLabel(threadIds: number[], label: string, on: boolean, actor: Actor = 'ui'): ActionResult {
-  const entry = snapshot(threadIds, on ? `Dodano etykietę ${label}` : `Usunięto etykietę ${label}`)
+  const entry = snapshot(threadIds, on ? t('Added label {label}', { label }) : t('Removed label {label}', { label }))
   for (const [accountId, list] of groupByAccount(threadMessageIds(threadIds, undefined, ['trash', 'junk']))) {
     entry.opIds.push(enqueue('labels', accountId, { messageIds: list.map((r) => r.id), ...(on ? { add: [label] } : { remove: [label] }) }, { actor }))
   }
@@ -230,7 +231,7 @@ export function setLabel(threadIds: number[], label: string, on: boolean, actor:
 }
 
 export function markRead(threadIds: number[], read: boolean, actor: Actor = 'ui'): ActionResult {
-  const entry = snapshot(threadIds, read ? 'Oznaczono jako przeczytane' : 'Oznaczono jako nieprzeczytane')
+  const entry = snapshot(threadIds, read ? t('Marked as read') : t('Marked as unread'))
   const rows = threadMessageIds(threadIds)
   if (read) setFlag(rows, '\\Seen', true, actor, entry)
   else {
@@ -252,7 +253,7 @@ export function markMessagesRead(messageIds: number[], read: boolean, actor: Act
 }
 
 export function pin(threadIds: number[], on: boolean, actor: Actor = 'ui'): ActionResult {
-  const entry = snapshot(threadIds, on ? 'Przypięto' : 'Odpięto')
+  const entry = snapshot(threadIds, on ? t('Conversation pinned') : t('Conversation unpinned'))
   run(`UPDATE threads SET pinned = ? WHERE id IN (${inList(threadIds)})`, on ? 1 : 0, ...threadIds)
   const rows = threadMessageIds(threadIds, undefined, ['trash', 'junk'])
   if (on) {
@@ -267,21 +268,21 @@ export function pin(threadIds: number[], on: boolean, actor: Actor = 'ui'): Acti
 }
 
 export function snooze(threadIds: number[], until: number | null, actor: Actor = 'ui'): ActionResult {
-  const entry = snapshot(threadIds, until ? `Odłożono do ${new Date(until).toLocaleString('pl-PL', { timeZone: getSettings().timeZone })}` : 'Anulowano odłożenie')
+  const entry = snapshot(threadIds, until ? t('Conversation snoozed until {when}', { when: new Date(until).toLocaleString(dateLocale(), { timeZone: getSettings().timeZone }) }) : t('Snooze cancelled'))
   run(`UPDATE threads SET snoozed_until = ?, resurfaced_at = NULL WHERE id IN (${inList(threadIds)})`, until, ...threadIds)
   record(actor, until ? 'snooze' : 'unsnooze', threadIds.join(','), until ? { until } : undefined)
   return finish(entry, threadIds.length)
 }
 
 export function setAside(threadIds: number[], on: boolean, actor: Actor = 'ui'): ActionResult {
-  const entry = snapshot(threadIds, on ? 'Odłożono na bok' : 'Wróciło do Odebranych')
+  const entry = snapshot(threadIds, on ? t('Conversation set aside') : t('Back in Inbox'))
   run(`UPDATE threads SET set_aside = ?, resurfaced_at = CASE WHEN ? = 0 THEN ? ELSE NULL END WHERE id IN (${inList(threadIds)})`, on ? 1 : 0, on ? 1 : 0, now(), ...threadIds)
   record(actor, on ? 'set-aside' : 'unset-aside', threadIds.join(','))
   return finish(entry, threadIds.length)
 }
 
 export function mute(threadIds: number[], on: boolean, actor: Actor = 'ui'): ActionResult {
-  const entry = snapshot(threadIds, on ? 'Wyciszono wątek' : 'Wyłączono wyciszenie')
+  const entry = snapshot(threadIds, on ? t('Conversation muted') : t('Conversation unmuted'))
   run(`UPDATE threads SET muted = ? WHERE id IN (${inList(threadIds)})`, on ? 1 : 0, ...threadIds)
   if (on) setFlag(threadMessageIds(threadIds), '\\Seen', true, actor, entry)
   record(actor, on ? 'mute' : 'unmute', threadIds.join(','))
@@ -289,7 +290,7 @@ export function mute(threadIds: number[], on: boolean, actor: Actor = 'ui'): Act
 }
 
 export function priority(threadIds: number[], on: boolean, actor: Actor = 'ui'): ActionResult {
-  const entry = snapshot(threadIds, on ? 'Oznaczono jako priorytet' : 'Usunięto priorytet')
+  const entry = snapshot(threadIds, on ? t('Marked as priority') : t('Priority removed'))
   run(`UPDATE threads SET priority = ? WHERE id IN (${inList(threadIds)})`, on ? 1 : 0, ...threadIds)
   record(actor, on ? 'priority' : 'unpriority', threadIds.join(','))
   return finish(entry, threadIds.length)
@@ -297,7 +298,7 @@ export function priority(threadIds: number[], on: boolean, actor: Actor = 'ui'):
 
 /** Remind me: bring the thread back at `at` (kind 'no-reply' only if nobody answered by then). */
 export function remind(threadIds: number[], at: number | null, kind: 'manual' | 'no-reply' = 'manual', actor: Actor = 'ui'): ActionResult {
-  const entry = snapshot(threadIds, at ? 'Ustawiono przypomnienie' : 'Usunięto przypomnienie')
+  const entry = snapshot(threadIds, at ? t('Reminder set') : t('Reminder removed'))
   run(
     `UPDATE threads SET reminder_at = ?, reminder_kind = ?, reminder_ref = ? WHERE id IN (${inList(threadIds)})`,
     at, at ? kind : null, at ? now() : null, ...threadIds,
@@ -316,7 +317,7 @@ function senderSnapshot(emails: string[]): UndoEntry['contacts'] {
 }
 
 export function acceptSenders(emails: string[], actor: Actor = 'ui'): ActionResult {
-  const entry = snapshot([], emails.length > 1 ? `Zaakceptowano ${emails.length} nadawców` : `Zaakceptowano ${emails[0]}`)
+  const entry = snapshot([], emails.length > 1 ? tp(emails.length, 'Accepted {n} sender', 'Accepted {n} senders') : t('Accepted {email}', { email: emails[0] }))
   entry.contacts = senderSnapshot(emails)
   for (const e of emails) setContactStatus(e, 'accepted')
   record(actor, 'accept-sender', emails.join(','))
@@ -326,7 +327,7 @@ export function acceptSenders(emails: string[], actor: Actor = 'ui'): ActionResu
 
 /** Block senders (or "@domain"): their mail goes to the Blocked folder, now and in future. */
 export function blockSenders(emails: string[], actor: Actor = 'ui'): ActionResult {
-  const entry = snapshot([], emails.length > 1 ? `Zablokowano ${emails.length} nadawców` : `Zablokowano ${emails[0]}`)
+  const entry = snapshot([], emails.length > 1 ? tp(emails.length, 'Blocked {n} sender', 'Blocked {n} senders') : t('Blocked {email}', { email: emails[0] }))
   entry.contacts = senderSnapshot(emails)
   for (const e of emails) setContactStatus(e, 'blocked')
   const rows: Row[] = []
@@ -347,7 +348,7 @@ export function blockSenders(emails: string[], actor: Actor = 'ui'): ActionResul
 }
 
 export function unblockSenders(emails: string[], actor: Actor = 'ui'): ActionResult {
-  const entry = snapshot([], `Odblokowano ${emails.join(', ')}`)
+  const entry = snapshot([], t('Unblocked {emails}', { emails: emails.join(', ') }))
   entry.contacts = senderSnapshot(emails)
   for (const e of emails) setContactStatus(e, 'accepted')
   record(actor, 'unblock-sender', emails.join(','))
@@ -356,7 +357,7 @@ export function unblockSenders(emails: string[], actor: Actor = 'ui'): ActionRes
 }
 
 export function changeSenderCategory(emails: string[], category: Category, actor: Actor = 'ui'): ActionResult {
-  const entry = snapshot([], `Przeniesiono nadawcę do: ${category === 'people' ? 'Ludzie' : category === 'notification' ? 'Powiadomienia' : 'Newslettery'}`)
+  const entry = snapshot([], t('Sender moved to {category}', { category: category === 'people' ? t('People') : category === 'notification' ? t('Notifications') : t('Newsletters') }))
   entry.contacts = senderSnapshot(emails)
   let n = 0
   for (const e of emails) n += setSenderCategory(e, category)
@@ -367,7 +368,7 @@ export function changeSenderCategory(emails: string[], category: Category, actor
 }
 
 export function prioritySender(emails: string[], on: boolean, actor: Actor = 'ui'): ActionResult {
-  const entry = snapshot([], on ? 'Nadawca priorytetowy' : 'Usunięto priorytet nadawcy')
+  const entry = snapshot([], on ? t('Priority sender') : t('Sender priority removed'))
   entry.contacts = senderSnapshot(emails)
   for (const e of emails) setVip(e, on)
   record(actor, on ? 'vip' : 'unvip', emails.join(','))
@@ -389,9 +390,9 @@ export function unsubscribe(threadIds: number[], actor: Actor = 'ui'): ActionRes
      WHERE m.thread_id IN (${inList(threadIds)}) AND m.list_unsubscribe IS NOT NULL ORDER BY m.date DESC`,
     ...threadIds,
   )
-  if (!rows.length) throw new Error('Ta wiadomość nie ma nagłówka List-Unsubscribe')
+  if (!rows.length) throw new Error(t('This message has no List-Unsubscribe header'))
   const done = new Set<number>()
-  const entry = snapshot(threadIds, 'Wypisano z listy')
+  const entry = snapshot(threadIds, t('Unsubscribed from the list'))
   for (const r of rows) {
     if (done.has(r.account_id)) continue
     done.add(r.account_id)

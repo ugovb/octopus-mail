@@ -5,6 +5,7 @@ import type { MailboxRef } from '../../../shared/types'
 import { api } from '../lib/api'
 import { type ThreadAction, useStore } from '../lib/store'
 import { askText, cx } from './ui'
+import { t } from '../../../shared/i18n'
 
 interface Cmd {
   id: string
@@ -43,82 +44,82 @@ export default function CommandPalette() {
   }, [palette])
 
   const cmds = useMemo<Cmd[]>(() => {
-    const go = (label: string, ref: MailboxRef, keywords = '') => ({ id: `go-${label}`, label: `Idź do: ${label}`, keywords: `idz przejdz go ${keywords}`, group: 'Nawigacja', run: () => st.setMailbox(ref) })
-    const act = (id: ThreadAction, label: string, keywords: string, hint?: string): Cmd => ({ id, label, hint, keywords, group: 'Wiadomość', run: () => void st.act(id) })
-    const t = threads.find((x) => x.thread_id === selected)
+    const go = (label: string, ref: MailboxRef, keywords = '') => ({ id: `go-${label}`, label: t('Go to: {name}', { name: label }), keywords: `idz przejdz go ${keywords}`, group: t('Navigation'), run: () => st.setMailbox(ref) })
+    const act = (id: ThreadAction, label: string, keywords: string, hint?: string): Cmd => ({ id, label, hint, keywords, group: t('Message'), run: () => void st.act(id) })
+    const th = threads.find((x) => x.thread_id === selected)
     const list: Cmd[] = [
-      { id: 'compose', label: 'Nowa wiadomość', hint: 'C', keywords: 'napisz utworz compose new email mail', group: 'Ogólne', run: () => st.compose({ mode: 'new' }) },
-      { id: 'search', label: 'Szukaj w poczcie', hint: '/', keywords: 'znajdz search find', group: 'Ogólne', run: () => document.getElementById('octo-search')?.focus() },
-      { id: 'ask', label: 'Zapytaj AI o pocztę', keywords: 'asystent ai ask pytanie', group: 'Ogólne', run: () => st.setView('ask') },
-      { id: 'sync', label: 'Synchronizuj teraz', keywords: 'pobierz odswiez fetch refresh', group: 'Ogólne', run: () => void api.syncNow() },
-      { id: 'cal', label: 'Otwórz kalendarz', keywords: 'calendar wydarzenia spotkania', group: 'Ogólne', run: () => st.setView('calendar') },
-      { id: 'contacts', label: 'Otwórz kontakty', keywords: 'contacts ludzie adresy', group: 'Ogólne', run: () => st.setView('contacts') },
-      { id: 'settings', label: 'Ustawienia', keywords: 'preferences opcje settings', group: 'Ogólne', run: () => st.setView('settings') },
-      { id: 'theme', label: settings?.theme === 'dark' ? 'Motyw jasny' : 'Motyw ciemny', keywords: 'dark light theme tryb', group: 'Ogólne', run: () => void st.updateSettings({ theme: settings?.theme === 'dark' ? 'light' : 'dark' }) },
-      { id: 'gk', label: settings?.gatekeeper === 'on' ? 'Wyłącz GateKeepera' : 'Włącz GateKeepera (nowi nadawcy czekają na akceptację)', keywords: 'gatekeeper nowi nadawcy screening', group: 'Ogólne', run: () => void st.updateSettings({ gatekeeper: settings?.gatekeeper === 'on' ? 'off' : 'on' }) },
+      { id: 'compose', label: t('New message'), hint: 'C', keywords: 'napisz utworz compose new email mail', group: t('General'), run: () => st.compose({ mode: 'new' }) },
+      { id: 'search', label: t('Search mail'), hint: '/', keywords: 'znajdz search find', group: t('General'), run: () => document.getElementById('octo-search')?.focus() },
+      { id: 'ask', label: t('Ask AI about your mail'), keywords: 'asystent ai ask pytanie', group: t('General'), run: () => st.setView('ask') },
+      { id: 'sync', label: t('Sync now'), keywords: 'pobierz odswiez fetch refresh', group: t('General'), run: () => void api.syncNow() },
+      { id: 'cal', label: t('Open calendar'), keywords: 'calendar wydarzenia spotkania', group: t('General'), run: () => st.setView('calendar') },
+      { id: 'contacts', label: t('Open contacts'), keywords: 'contacts ludzie adresy', group: t('General'), run: () => st.setView('contacts') },
+      { id: 'settings', label: t('Settings'), keywords: 'preferences opcje settings', group: t('General'), run: () => st.setView('settings') },
+      { id: 'theme', label: settings?.theme === 'dark' ? t('Light theme') : t('Dark theme'), keywords: 'dark light theme tryb', group: t('General'), run: () => void st.updateSettings({ theme: settings?.theme === 'dark' ? 'light' : 'dark' }) },
+      { id: 'gk', label: settings?.gatekeeper === 'on' ? t('Turn off Gatekeeper') : t('Turn on Gatekeeper (new senders wait for approval)'), keywords: 'gatekeeper nowi nadawcy screening', group: t('General'), run: () => void st.updateSettings({ gatekeeper: settings?.gatekeeper === 'on' ? 'off' : 'on' }) },
       {
-        id: 'savesearch', label: 'Zapisz wyszukiwanie jako inteligentny folder', keywords: 'smart folder zapisz', group: 'Ogólne',
+        id: 'savesearch', label: t('Save search as a smart folder'), keywords: 'smart folder zapisz', group: t('General'),
         run: async () => {
-          const query = st.searchQuery || (await askText('Zapytanie (np. from:szef@firma.pl has:attachment)'))
+          const query = st.searchQuery || (await askText(t('Query (e.g. from:boss@company.com has:attachment)')))
           if (!query) return
-          const name = await askText('Nazwa inteligentnego folderu', query)
+          const name = await askText(t('Smart folder name'), query)
           if (name) await api.saveSmartFolder({ name, query })
           void st.refreshMeta()
         },
       },
       go('Smart Inbox', { kind: 'smart' }, 'inbox odebrane skrzynka'),
-      go('Przypięte', { kind: 'pinned' }, 'pinned star'),
-      go('Odłożone', { kind: 'snoozed' }, 'snoozed'),
-      go('Na boku', { kind: 'setaside' }, 'set aside'),
-      go('Przypomnienia', { kind: 'reminders' }, 'reminders'),
-      go('Zaplanowane', { kind: 'scheduled' }, 'scheduled send later outbox'),
-      go('Wersje robocze', { kind: 'local-drafts' }, 'drafts szkice'),
-      go('Nowi nadawcy', { kind: 'newsenders' }, 'gatekeeper new senders'),
-      go('Wysłane', { kind: 'unified', role: 'sent' }, 'sent'),
-      go('Archiwum', { kind: 'unified', role: 'archive' }, 'archive done zrobione'),
-      go('Kosz', { kind: 'unified', role: 'trash' }, 'trash bin'),
-      go('Spam', { kind: 'unified', role: 'junk' }, 'junk'),
-      go('Newslettery', { kind: 'category', category: 'newsletter' }, 'newsletter'),
-      go('Powiadomienia', { kind: 'category', category: 'notification' }, 'notifications'),
-      go('Ludzie', { kind: 'category', category: 'people' }, 'people'),
+      go(t('Pinned'), { kind: 'pinned' }, 'pinned star'),
+      go(t('Snoozed'), { kind: 'snoozed' }, 'snoozed'),
+      go(t('Set Aside'), { kind: 'setaside' }, 'set aside'),
+      go(t('Reminders'), { kind: 'reminders' }, 'reminders'),
+      go(t('Scheduled'), { kind: 'scheduled' }, 'scheduled send later outbox'),
+      go(t('Drafts'), { kind: 'local-drafts' }, 'drafts szkice'),
+      go(t('New senders'), { kind: 'newsenders' }, 'gatekeeper new senders'),
+      go(t('Sent'), { kind: 'unified', role: 'sent' }, 'sent'),
+      go(t('Archive'), { kind: 'unified', role: 'archive' }, 'archive done zrobione'),
+      go(t('Trash'), { kind: 'unified', role: 'trash' }, 'trash bin'),
+      go(t('Spam'), { kind: 'unified', role: 'junk' }, 'junk'),
+      go(t('Newsletters'), { kind: 'category', category: 'newsletter' }, 'newsletter'),
+      go(t('Notifications'), { kind: 'category', category: 'notification' }, 'notifications'),
+      go(t('People'), { kind: 'category', category: 'people' }, 'people'),
       ...smartFolders.map((sf) => go(sf.name, { kind: 'smartfolder', id: sf.id }, 'smart folder')),
       ...folders.filter((f) => !f.role).map((f) => ({
-        id: `f-${f.id}`, label: `Folder: ${f.path}`, hint: accounts.find((a) => a.id === f.account_id)?.email, keywords: `folder ${f.name}`, group: 'Foldery',
+        id: `f-${f.id}`, label: t('Folder: {path}', { path: f.path }), hint: accounts.find((a) => a.id === f.account_id)?.email, keywords: `folder ${f.name}`, group: t('Folders'),
         run: () => st.setMailbox({ kind: 'folder', folderId: f.id }),
       })),
     ]
     if (st.targets().length) {
       list.push(
-        act('archive', 'Zrobione (archiwizuj)', 'done archive archiwizuj zrobione', 'E'),
-        { id: 'snooze', label: 'Odłóż…', hint: 'H', keywords: 'snooze pozniej odloz read later', group: 'Wiadomość', run: () => useStore.setState({ snoozeFor: st.targets(), pickerMode: 'snooze' }) },
-        { id: 'remind', label: 'Przypomnij mi…', keywords: 'remind follow up przypomnienie', group: 'Wiadomość', run: () => useStore.setState({ snoozeFor: st.targets(), pickerMode: 'remind' }) },
-        { id: 'move', label: 'Przenieś do folderu…', hint: 'V', keywords: 'move folder przenies', group: 'Wiadomość', run: () => useStore.setState({ moveFor: st.targets() }) },
-        act('pin', 'Przypnij', 'pin star flag gwiazdka oznacz', 'S'),
-        act('unpin', 'Odepnij', 'unpin'),
-        act('trash', 'Do kosza', 'delete usun trash bin', '#'),
-        act('spam', 'To spam', 'spam junk'),
-        act('read', 'Oznacz jako przeczytane', 'read seen'),
-        act('unread', 'Oznacz jako nieprzeczytane', 'unread', 'U'),
-        act('mute', 'Wycisz wątek', 'mute cisza', 'M'),
-        act('aside', 'Odłóż na bok', 'set aside'),
-        act('priority', 'Oznacz jako priorytet', 'priority wazne'),
-        act('unsubscribe', 'Wypisz się z newslettera', 'unsubscribe wypisz'),
-        act('moveToInbox', 'Przenieś do Odebranych', 'inbox restore przywroc'),
+        act('archive', t('Done (archive)'), 'done archive archiwizuj zrobione', 'E'),
+        { id: 'snooze', label: t('Snooze…'), hint: 'H', keywords: 'snooze pozniej odloz read later', group: t('Message'), run: () => useStore.setState({ snoozeFor: st.targets(), pickerMode: 'snooze' }) },
+        { id: 'remind', label: t('Remind me…'), keywords: 'remind follow up przypomnienie', group: t('Message'), run: () => useStore.setState({ snoozeFor: st.targets(), pickerMode: 'remind' }) },
+        { id: 'move', label: t('Move to folder…'), hint: 'V', keywords: 'move folder przenies', group: t('Message'), run: () => useStore.setState({ moveFor: st.targets() }) },
+        act('pin', t('Pin'), 'pin star flag gwiazdka oznacz', 'S'),
+        act('unpin', t('Unpin'), 'unpin'),
+        act('trash', t('Move to Trash'), 'delete usun trash bin', '#'),
+        act('spam', t('Mark as spam'), 'spam junk'),
+        act('read', t('Mark as read'), 'read seen'),
+        act('unread', t('Mark as unread'), 'unread', 'U'),
+        act('mute', t('Mute conversation'), 'mute cisza', 'M'),
+        act('aside', t('Set aside'), 'set aside'),
+        act('priority', t('Mark as priority'), 'priority wazne'),
+        act('unsubscribe', t('Unsubscribe from newsletter'), 'unsubscribe wypisz'),
+        act('moveToInbox', t('Move to Inbox'), 'inbox restore przywroc'),
       )
-      if (t) {
-        const last = t.latest_message_id
+      if (th) {
+        const last = th.latest_message_id
         list.push(
-          { id: 'reply', label: 'Odpowiedz', hint: 'R', keywords: 'reply odpowiedz', group: 'Wiadomość', run: () => st.compose({ mode: 'reply', messageId: last, threadId: t.thread_id }) },
-          { id: 'replyall', label: 'Odpowiedz wszystkim', hint: 'A', keywords: 'reply all', group: 'Wiadomość', run: () => st.compose({ mode: 'replyall', messageId: last, threadId: t.thread_id }) },
-          { id: 'forward', label: 'Przekaż dalej', hint: 'F', keywords: 'forward przekaz', group: 'Wiadomość', run: () => st.compose({ mode: 'forward', messageId: last, threadId: t.thread_id }) },
-          { id: 'accept', label: `Akceptuj nadawcę ${t.from.email}`, keywords: 'accept sender akceptuj', group: 'Nadawca', run: () => void st.senders('accept', [t.from.email]) },
-          { id: 'block', label: `Blokuj nadawcę ${t.from.email}`, keywords: 'block sender blokuj', group: 'Nadawca', run: () => void st.senders('block', [t.from.email]) },
-          { id: 'blockdomain', label: `Blokuj domenę @${t.from.email.split('@')[1]}`, keywords: 'block domain blokuj domene', group: 'Nadawca', run: () => void st.senders('block', ['@' + t.from.email.split('@')[1]]) },
-          { id: 'vip', label: `Nadawca priorytetowy: ${t.from.email}`, keywords: 'vip priority sender', group: 'Nadawca', run: () => void st.senders('vip', [t.from.email]) },
-          { id: 'cat-p', label: 'Zmień kategorię nadawcy → Ludzie', keywords: 'change category people', group: 'Nadawca', run: () => void st.categorize([t.from.email], 'people') },
-          { id: 'cat-n', label: 'Zmień kategorię nadawcy → Powiadomienia', keywords: 'change category notifications', group: 'Nadawca', run: () => void st.categorize([t.from.email], 'notification') },
-          { id: 'cat-l', label: 'Zmień kategorię nadawcy → Newslettery', keywords: 'change category newsletter', group: 'Nadawca', run: () => void st.categorize([t.from.email], 'newsletter') },
-          { id: 'searchsender', label: `Wszystkie wiadomości od ${t.from.email}`, keywords: 'search sender szukaj od', group: 'Nadawca', run: () => st.setMailbox({ kind: 'search', query: `from:${t.from.email}` }) },
+          { id: 'reply', label: t('Reply'), hint: 'R', keywords: 'reply odpowiedz', group: t('Message'), run: () => st.compose({ mode: 'reply', messageId: last, threadId: th.thread_id }) },
+          { id: 'replyall', label: t('Reply to all'), hint: 'A', keywords: 'reply all', group: t('Message'), run: () => st.compose({ mode: 'replyall', messageId: last, threadId: th.thread_id }) },
+          { id: 'forward', label: t('Forward message'), hint: 'F', keywords: 'forward przekaz', group: t('Message'), run: () => st.compose({ mode: 'forward', messageId: last, threadId: th.thread_id }) },
+          { id: 'accept', label: t('Accept sender {email}', { email: th.from.email }), keywords: 'accept sender akceptuj', group: t('Sender'), run: () => void st.senders('accept', [th.from.email]) },
+          { id: 'block', label: t('Block sender {email}', { email: th.from.email }), keywords: 'block sender blokuj', group: t('Sender'), run: () => void st.senders('block', [th.from.email]) },
+          { id: 'blockdomain', label: t('Block domain @{domain}', { domain: th.from.email.split('@')[1] }), keywords: 'block domain blokuj domene', group: t('Sender'), run: () => void st.senders('block', ['@' + th.from.email.split('@')[1]]) },
+          { id: 'vip', label: t('Priority sender: {email}', { email: th.from.email }), keywords: 'vip priority sender', group: t('Sender'), run: () => void st.senders('vip', [th.from.email]) },
+          { id: 'cat-p', label: t('Change sender category → People'), keywords: 'change category people', group: t('Sender'), run: () => void st.categorize([th.from.email], 'people') },
+          { id: 'cat-n', label: t('Change sender category → Notifications'), keywords: 'change category notifications', group: t('Sender'), run: () => void st.categorize([th.from.email], 'notification') },
+          { id: 'cat-l', label: t('Change sender category → Newsletters'), keywords: 'change category newsletter', group: t('Sender'), run: () => void st.categorize([th.from.email], 'newsletter') },
+          { id: 'searchsender', label: t('All messages from {email}', { email: th.from.email }), keywords: 'search sender szukaj od', group: t('Sender'), run: () => st.setMailbox({ kind: 'search', query: `from:${th.from.email}` }) },
         )
       }
     }
@@ -128,7 +129,7 @@ export default function CommandPalette() {
   const results = useMemo(() => {
     if (!q.trim()) return cmds.slice(0, 40)
     const scored = cmds.map((c) => ({ c, s: score(q, c) })).filter((x) => x.s >= 0).sort((a, b) => b.s - a.s).map((x) => x.c)
-    scored.push({ id: 'search-q', label: `Szukaj: ${q}`, keywords: '', group: 'Szukaj', run: () => st.setMailbox({ kind: 'search', query: q }) })
+    scored.push({ id: 'search-q', label: t('Search: {query}', { query: q }), keywords: '', group: t('Search'), run: () => st.setMailbox({ kind: 'search', query: q }) })
     return scored.slice(0, 40)
   }, [q, cmds])
 
@@ -152,7 +153,7 @@ export default function CommandPalette() {
               if (e.key === 'ArrowUp') (e.preventDefault(), setHi((h) => Math.max(h - 1, 0)))
               if (e.key === 'Enter' && results[hi]) run(results[hi])
             }}
-            placeholder="Wpisz polecenie, folder albo szukaj…"
+            placeholder={t('Type a command or folder, or search…')}
             className="h-12 flex-1 bg-transparent text-[14.5px] outline-none"
           />
         </div>

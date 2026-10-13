@@ -1,4 +1,5 @@
 // Event reminders (VALARM) and the scheduler hook: periodic sync + desktop notifications.
+import { t, tp } from '../../shared/i18n'
 import { bus, log } from '../events'
 import { getKV, setKV } from '../settings'
 import { syncCalendars } from './calsync'
@@ -55,7 +56,7 @@ export function upcomingAlarms(windowMs: number, at = Date.now()): UpcomingAlarm
       if (fired[key] || out.some((o) => o.key === key)) continue
       out.push({
         eventId: e.id,
-        summary: e.summary || '(bez tytułu)',
+        summary: e.summary || t('(no title)'),
         start: e.start,
         minutesBefore,
         fireAt,
@@ -71,19 +72,19 @@ export function upcomingAlarms(windowMs: number, at = Date.now()): UpcomingAlarm
 }
 
 function inWords(mins: number): string {
-  if (mins < 60) return `${mins} min`
+  if (mins < 60) return t('{n} min', { n: mins })
   if (mins < 24 * 60) {
     const h = Math.floor(mins / 60)
     const m = mins % 60
-    return `${h} godz.${m ? ` ${m} min` : ''}`
+    return `${t('{h} h', { h })}${m ? ` ${t('{n} min', { n: m })}` : ''}`
   }
   const d = Math.round(mins / (24 * 60))
-  return d === 1 ? '1 dzień' : `${d} dni`
+  return tp(d, '{n} day', '{n} days')
 }
 
 export function alarmMessage(a: Pick<UpcomingAlarm, 'summary' | 'start'>, at = Date.now()): string {
   const mins = Math.round((a.start - at) / 60_000)
-  return mins >= 1 ? `📅 ${a.summary} za ${inWords(mins)}` : `📅 ${a.summary} — zaczyna się teraz`
+  return mins >= 1 ? `📅 ${t('{title} in {time}', { title: a.summary, time: inWords(mins) })}` : `📅 ${t('{title} — starting now', { title: a.summary })}`
 }
 
 /** Emit notifications for reminders that are due now; each occurrence/reminder fires once. */
@@ -97,10 +98,10 @@ export function fireDueAlarms(at = Date.now()): UpcomingAlarm[] {
       type: 'toast',
       level: 'info',
       message: alarmMessage(a, at),
-      action: a.conference_url ? { label: 'Dołącz', command: 'openExternal', args: a.conference_url } : undefined,
+      action: a.conference_url ? { label: t('Join'), command: 'openExternal', args: a.conference_url } : undefined,
     })
   }
-  for (const [k, t] of Object.entries(fired)) if (t < at - 3 * DAY) delete fired[k]
+  for (const [k, firedAt] of Object.entries(fired)) if (firedAt < at - 3 * DAY) delete fired[k]
   setKV(FIRED_KEY, fired)
   return due
 }

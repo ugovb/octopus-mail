@@ -125,8 +125,11 @@ describe('Octopus Mail home server', () => {
   })
 
   it('logs browsers in with a pairing code and protects writes from other sites', async () => {
+    // the sign-in page follows the browser language
     const page = await fetch(`${base}/`)
-    assert.match(await page.text(), /kod parowania/i)
+    assert.match(await page.text(), /pairing code/i)
+    const pagePl = await fetch(`${base}/`, { headers: { 'Accept-Language': 'pl-PL,pl;q=0.9,en;q=0.8' } })
+    assert.match(await pagePl.text(), /kod parowania/i)
     const { code } = createPairingCode()
     const login = await fetch(`${base}/api/login`, { method: 'POST', body: new URLSearchParams({ code }), redirect: 'manual' })
     assert.equal(login.status, 303)

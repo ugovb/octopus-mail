@@ -1,4 +1,5 @@
 import dns from 'node:dns/promises'
+import { t } from '../shared/i18n'
 import type { AuthKind } from '../shared/types'
 
 export interface ServerConfig {
@@ -36,39 +37,50 @@ const P = (
   ...extra,
 })
 
+/** Known providers. Hints are English source texts: use presets() / discover() for the UI language. */
 export const PRESETS: Record<string, ServerConfig> = {
   gmail: P('gmail', 'Gmail / Google Workspace', 'imap.gmail.com', 'smtp.gmail.com', 465, {
     auth: ['password', 'oauth-google'],
     is_gmail: true,
-    hint: 'Gmail: wygeneruj „hasło do aplikacji” (myaccount.google.com → Bezpieczeństwo → Hasła do aplikacji) albo zaloguj się przez Google OAuth.',
+    hint: 'Gmail: create an “app password” (myaccount.google.com → Security → App passwords) or sign in with Google OAuth.',
   }),
   outlook: P('outlook', 'Outlook / Hotmail / Microsoft 365', 'outlook.office365.com', 'smtp.office365.com', 587, {
     auth: ['oauth-microsoft', 'password'],
-    hint: 'Microsoft wymaga zwykle logowania OAuth; hasło działa tylko na kontach z włączonym IMAP/SMTP AUTH.',
+    hint: 'Microsoft usually requires OAuth sign-in; a password works only on accounts with IMAP/SMTP AUTH turned on.',
   }),
-  yahoo: P('yahoo', 'Yahoo Mail', 'imap.mail.yahoo.com', 'smtp.mail.yahoo.com', 465, { hint: 'Yahoo: użyj hasła aplikacji.' }),
-  icloud: P('icloud', 'iCloud Mail', 'imap.mail.me.com', 'smtp.mail.me.com', 587, { hint: 'iCloud: użyj hasła dla aplikacji z appleid.apple.com.' }),
+  yahoo: P('yahoo', 'Yahoo Mail', 'imap.mail.yahoo.com', 'smtp.mail.yahoo.com', 465, { hint: 'Yahoo: use an app password.' }),
+  icloud: P('icloud', 'iCloud Mail', 'imap.mail.me.com', 'smtp.mail.me.com', 587, { hint: 'iCloud: use an app-specific password from appleid.apple.com.' }),
   aol: P('aol', 'AOL Mail', 'imap.aol.com', 'smtp.aol.com', 465),
   fastmail: P('fastmail', 'Fastmail', 'imap.fastmail.com', 'smtp.fastmail.com', 465),
   zoho: P('zoho', 'Zoho Mail', 'imap.zoho.eu', 'smtp.zoho.eu', 465),
   mailcom: P('mailcom', 'mail.com', 'imap.mail.com', 'smtp.mail.com', 587, {
-    hint: 'mail.com: włącz dostęp POP3/IMAP w ustawieniach skrzynki na stronie mail.com.',
+    hint: 'mail.com: turn on POP3/IMAP access in the mailbox settings on mail.com.',
   }),
   gmx: P('gmx', 'GMX', 'imap.gmx.com', 'mail.gmx.com', 587),
   homepl: P('homepl', 'home.pl', '', '', 465, {
-    hint: 'home.pl: serwer to zwykle nazwa domeny albo serwerXXXX.home.pl (panel home.pl → Poczta).',
+    hint: 'home.pl: the server is usually the domain name or serverXXXX.home.pl (home.pl panel → Mail).',
   }),
-  wp: P('wp', 'WP Poczta', 'imap.wp.pl', 'smtp.wp.pl', 465, { hint: 'WP: włącz dostęp IMAP/SMTP w ustawieniach poczty.' }),
+  wp: P('wp', 'WP Poczta', 'imap.wp.pl', 'smtp.wp.pl', 465, { hint: 'WP: turn on IMAP/SMTP access in the mail settings.' }),
   o2: P('o2', 'o2.pl', 'poczta.o2.pl', 'poczta.o2.pl', 465),
-  onet: P('onet', 'Onet Poczta', 'imap.poczta.onet.pl', 'smtp.poczta.onet.pl', 465, { hint: 'Onet: włącz dostęp przez programy pocztowe.' }),
+  onet: P('onet', 'Onet Poczta', 'imap.poczta.onet.pl', 'smtp.poczta.onet.pl', 465, { hint: 'Onet: turn on access for mail programs.' }),
   interia: P('interia', 'Interia', 'poczta.interia.pl', 'poczta.interia.pl', 465),
   yandex: P('yandex', 'Yandex', 'imap.yandex.com', 'smtp.yandex.com', 465),
   proton: P('proton', 'Proton Mail (Bridge)', '127.0.0.1', '127.0.0.1', 1025, {
     imap_port: 1143,
     imap_secure: false,
     smtp_secure: false,
-    hint: 'Proton wymaga uruchomionego Proton Mail Bridge.',
+    hint: 'Proton requires Proton Mail Bridge to be running.',
   }),
+}
+
+/** A preset with its hint in the UI language. */
+function localized(cfg: ServerConfig): ServerConfig {
+  return cfg.hint ? { ...cfg, hint: t(cfg.hint) } : { ...cfg }
+}
+
+/** All presets for the account wizard (hints in the UI language). */
+export function presets(): Record<string, ServerConfig> {
+  return Object.fromEntries(Object.entries(PRESETS).map(([k, v]) => [k, localized(v)]))
 }
 
 const DOMAIN_MAP: Record<string, string> = {
@@ -173,13 +185,13 @@ export async function discover(email: string): Promise<ServerConfig | null> {
   const domain = email.split('@')[1]?.toLowerCase()
   if (!domain) return null
   const known = DOMAIN_MAP[domain]
-  if (known) return { ...PRESETS[known] }
+  if (known) return localized(PRESETS[known])
 
   const mx = await mxHosts(domain)
   for (const host of mx) {
     const hit = MX_MAP.find(([re]) => re.test(host))
     if (hit) {
-      const preset = { ...PRESETS[hit[1]] }
+      const preset = localized(PRESETS[hit[1]])
       if (hit[1] === 'homepl') {
         // home.pl serves IMAP/SMTP for hosted domains on the domain name itself.
         preset.imap_host = domain

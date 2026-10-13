@@ -2,7 +2,8 @@
 
 Darmowy, lokalny klient poczty dla Windows i Linuksa (Electron 44 + React 19 + TypeScript + Tailwind v4). Funkcje
 w stylu Spark Mail, ale cały kod, grafika i teksty są własne — nie kopiujemy niczego z Readdle/Spark.
-Wszystkie teksty w aplikacji są po polsku.
+Interfejs jest dwujęzyczny: teksty w kodzie po angielsku przez `t()` / `tp()` z `src/shared/i18n.ts`, polskie tłumaczenia
+w `src/shared/locales/pl/*.ts` (sprawdzenie: `npm run i18n:check`).
 
 Najpierw przeczytaj `README_pl.md` (albo `README.md`) i `CONTRIBUTING.md`.
 

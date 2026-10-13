@@ -1,45 +1,50 @@
 import type { Address } from '../../../shared/types'
-
-const MONTHS = ['sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip', 'sie', 'wrz', 'paź', 'lis', 'gru']
-const DAYS = ['nd', 'pon', 'wt', 'śr', 'czw', 'pt', 'sob']
-const DAYS_FULL = ['niedziela', 'poniedziałek', 'wtorek', 'środa', 'czwartek', 'piątek', 'sobota']
+import { dateLocale, t } from '../../../shared/i18n'
 
 const pad = (n: number) => String(n).padStart(2, '0')
+/** Fixed 24-hour "HH:MM" (also used as the value of time inputs). */
 export const hhmm = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`
 
-/** Compact list date: 14:05 · wczoraj · pt · 12 paź · 12.10.2024 */
+/** Short weekday names for the list (Sunday first); Polish uses its own short forms (nd, pon, wt…). */
+const shortDays = () => t('Sun Mon Tue Wed Thu Fri Sat').split(' ')
+
+/** Compact list date: 14:05 · yesterday · Fri · 12 Oct · 12/10/2024 (Polish: 14:05 · wczoraj · pt · 12 paź · 12.10.2024) */
 export function listDate(ts: number): string {
   const d = new Date(ts)
   const now = new Date()
   if (d.toDateString() === now.toDateString()) return hhmm(d)
   const y = new Date(now)
   y.setDate(now.getDate() - 1)
-  if (d.toDateString() === y.toDateString()) return 'wczoraj'
+  if (d.toDateString() === y.toDateString()) return t('yesterday')
   const diff = (now.getTime() - ts) / 86400_000
-  if (diff < 6 && diff > 0) return DAYS[d.getDay()]
-  if (d.getFullYear() === now.getFullYear()) return `${d.getDate()} ${MONTHS[d.getMonth()]}`
-  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`
+  if (diff < 6 && diff > 0) return shortDays()[d.getDay()]
+  if (d.getFullYear() === now.getFullYear()) return d.toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short' })
+  return d.toLocaleDateString(dateLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
+/** e.g. "Friday, 12 Oct 2024, 14:05" (Polish: "piątek, 12 paź 2024, 14:05") */
 export function fullDate(ts: number): string {
-  const d = new Date(ts)
-  return `${DAYS_FULL[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${hhmm(d)}`
+  return new Date(ts).toLocaleString(dateLocale(), {
+    weekday: 'long', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  })
 }
 
 export function dayHeader(ts: number): string {
   const d = new Date(ts)
   const now = new Date()
-  if (d.toDateString() === now.toDateString()) return 'Dzisiaj'
+  if (d.toDateString() === now.toDateString()) return t('Today')
   const y = new Date(now)
   y.setDate(now.getDate() - 1)
-  if (d.toDateString() === y.toDateString()) return 'Wczoraj'
+  if (d.toDateString() === y.toDateString()) return t('Yesterday')
   const diff = (now.getTime() - ts) / 86400_000
-  if (diff < 7) return 'W tym tygodniu'
-  if (diff < 31) return 'W tym miesiącu'
-  if (d.getFullYear() === now.getFullYear()) return MONTHS_FULL[d.getMonth()]
+  if (diff < 7) return t('This week')
+  if (diff < 31) return t('This month')
+  if (d.getFullYear() === now.getFullYear()) {
+    const m = d.toLocaleDateString(dateLocale(), { month: 'long' })
+    return m.charAt(0).toUpperCase() + m.slice(1)
+  }
   return String(d.getFullYear())
 }
-const MONTHS_FULL = ['Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec', 'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień']
 
 export function displayName(a: Address | null | undefined): string {
   if (!a) return ''
@@ -117,5 +122,5 @@ export async function copyText(text: string): Promise<void> {
   ta.select()
   const ok = document.execCommand('copy')
   ta.remove()
-  if (!ok) throw new Error('Schowek niedostępny')
+  if (!ok) throw new Error(t('Clipboard unavailable'))
 }

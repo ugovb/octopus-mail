@@ -4,6 +4,7 @@ import {
   app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, Notification, protocol, net, shell, Tray, type MenuItemConstructorOptions,
 } from 'electron'
 import os from 'node:os'
+import { getLang, initLang, t, tp, type Lang, type LangSetting } from '../shared/i18n'
 import type { CoreEvent } from '../shared/types'
 import { log } from '../core/events'
 import { startOAuth, type OAuthClient, type OAuthProvider } from '../core/oauth'
@@ -20,7 +21,7 @@ let quitting = false
 const isolatedProfile = !!process.env.OCTO_HOME
 if (isolatedProfile) app.setPath('userData', path.join(process.env.OCTO_HOME!, 'electron-profile'))
 
-// Data lives either in the local engine or on a paired home server (Settings → Serwer domowy).
+// Data lives either in the local engine or on a paired home server (Settings → Home server).
 const remoteConfig = loadRemoteConfig()
 const backend: Backend = remoteConfig ? new RemoteBackend(remoteConfig) : new LocalBackend()
 
@@ -51,6 +52,8 @@ function trayIcon(unread: boolean): string {
 }
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'octo-cid', privileges: { standard: true, secure: true, supportFetchAPI: true, bypassCSP: false } }])
+
+const demoTitle = () => t('Octopus Mail — DEMO (test profile)')
 
 function iconPath(filename = 'icon.png'): string {
   const candidates = [
@@ -84,7 +87,7 @@ function createWindow(show = true): void {
   })
   if (isolatedProfile) {
     // make test/demo windows obviously different from the real app
-    win.setTitle('Octopus Mail — DEMO (profil testowy)')
+    win.setTitle(demoTitle())
     win.on('page-title-updated', (e) => e.preventDefault())
   }
   win.webContents.session.setSpellCheckerLanguages(['pl', 'en-US'])
@@ -109,10 +112,10 @@ function createWindow(show = true): void {
   win.webContents.on('context-menu', (_e, params) => {
     const items: MenuItemConstructorOptions[] = []
     for (const s of params.dictionarySuggestions.slice(0, 5)) items.push({ label: s, click: () => win?.webContents.replaceMisspelling(s) })
-    if (params.misspelledWord) items.push({ label: 'Dodaj do słownika', click: () => win?.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord) }, { type: 'separator' })
-    if (params.linkURL) items.push({ label: 'Kopiuj link', click: () => clipboard.writeText(params.linkURL) })
-    if (params.isEditable) items.push({ role: 'cut', label: 'Wytnij' }, { role: 'copy', label: 'Kopiuj' }, { role: 'paste', label: 'Wklej' }, { role: 'pasteAndMatchStyle', label: 'Wklej bez formatowania' })
-    else if (params.selectionText) items.push({ role: 'copy', label: 'Kopiuj' })
+    if (params.misspelledWord) items.push({ label: t('Add to dictionary'), click: () => win?.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord) }, { type: 'separator' })
+    if (params.linkURL) items.push({ label: t('Copy link'), click: () => clipboard.writeText(params.linkURL) })
+    if (params.isEditable) items.push({ role: 'cut', label: t('Cut') }, { role: 'copy', label: t('Copy') }, { role: 'paste', label: t('Paste') }, { role: 'pasteAndMatchStyle', label: t('Paste as plain text') })
+    else if (params.selectionText) items.push({ role: 'copy', label: t('Copy') })
     if (items.length) Menu.buildFromTemplate(items).popup()
   })
 
@@ -181,7 +184,7 @@ async function onNewMail(ev: Extract<CoreEvent, { type: 'new-mail' }>): Promise<
   const rows = await backend.newMailInfo(ev.accountId, ev.messageIds).catch(() => [])
   if (!rows.length) return
   if (rows.length > 3) {
-    notify(`${rows.length} nowe wiadomości`, rows.map((r) => r.from_name || r.from_email).slice(0, 4).join(', '))
+    notify(tp(rows.length, '{n} new message', '{n} new messages'), rows.map((r) => r.from_name || r.from_email).slice(0, 4).join(', '))
     return
   }
   for (const m of rows) notify(m.from_name || m.from_email, `${m.subject}\n${(m.snippet || '').slice(0, 120)}`, () => send('deep-link', { kind: 'thread', id: m.thread_id }))
@@ -200,9 +203,9 @@ function forwardEvent(ev: CoreEvent): void {
     return
   }
   if (ev.type === 'new-mail') void onNewMail(ev)
-  if (ev.type === 'server-connection') tray?.setToolTip(ev.online ? 'Octopus Mail — serwer domowy połączony' : 'Octopus Mail — brak połączenia z serwerem domowym')
-  if (ev.type === 'reminder') notify('⏰ Przypomnienie', ev.subject || '(bez tematu)', () => send('deep-link', { kind: 'thread', id: ev.threadId }))
-  if (ev.type === 'toast' && ev.message.startsWith('📅') && (!win || !win.isVisible() || !win.isFocused())) notify('Kalendarz', ev.message)
+  if (ev.type === 'server-connection') tray?.setToolTip(ev.online ? t('Octopus Mail — home server connected') : t('Octopus Mail — no connection to the home server'))
+  if (ev.type === 'reminder') notify(t('⏰ Reminder'), ev.subject || t('(no subject)'), () => send('deep-link', { kind: 'thread', id: ev.threadId }))
+  if (ev.type === 'toast' && ev.message.startsWith('📅') && (!win || !win.isVisible() || !win.isFocused())) notify(t('Calendar'), ev.message)
   send('core-event', ev)
 }
 
@@ -211,7 +214,7 @@ async function updateBadge(): Promise<void> {
     const n = await backend.unreadCount()
     const icon = trayIcon(n > 0)
     if (icon) tray?.setImage(icon)
-    tray?.setToolTip(n ? `Octopus Mail — nieprzeczytane: ${n}` : 'Octopus Mail')
+    tray?.setToolTip(n ? t('Octopus Mail — {n} unread', { n }) : 'Octopus Mail')
     send('badge-request', n)
   } catch {
     /* db busy */
@@ -231,12 +234,12 @@ function registerIpc(): void {
     // the browser flow always runs here (it needs this computer's browser); with a home server
     // the client ID comes from the server and the resulting tokens are stored there
     const client = backend.kind === 'remote' ? ((await backend.call('getKV', [`oauth.${provider}`, null])) as OAuthClient | null) : null
-    if (backend.kind === 'remote' && !client?.clientId) throw new Error('Na serwerze domowym nie ustawiono OAuth Client ID (Ustawienia → Konta → OAuth).')
+    if (backend.kind === 'remote' && !client?.clientId) throw new Error(t('The home server has no OAuth Client ID set (Settings → Accounts → OAuth).'))
     const { url, done } = await startOAuth(provider, email, client)
     await shell.openExternal(url)
     const tokens = await done
     const address = (email || tokens.email || '').toLowerCase()
-    if (!address) throw new Error('Nie udało się ustalić adresu e-mail konta')
+    if (!address) throw new Error(t("Couldn't determine the account's email address"))
     return backend.call('addAccount', [{
       email: address,
       name,
@@ -271,7 +274,7 @@ function registerIpc(): void {
     relaunch()
   })
   ipcMain.handle('server-new-code', async (_e, name?: string) => {
-    if (backend.kind !== 'remote') throw new Error('Aplikacja nie jest połączona z serwerem domowym')
+    if (backend.kind !== 'remote') throw new Error(t('The app is not connected to a home server'))
     const r = backend as RemoteBackend
     const res = await fetch(`${r.cfg.url}/api/devices/pair`, { method: 'POST', headers: { Authorization: `Bearer ${r.cfg.token}` }, body: JSON.stringify({ name }) })
     return res.json()
@@ -332,7 +335,7 @@ function registerIpc(): void {
       return
     }
     if (!dataUrl || !count) win.setOverlayIcon(null, '')
-    else win.setOverlayIcon(nativeImage.createFromDataURL(dataUrl), `${count} nieprzeczytanych`)
+    else win.setOverlayIcon(nativeImage.createFromDataURL(dataUrl), tp(count, '{n} unread', '{n} unread'))
   })
   ipcMain.handle('set-login-item', (_e, on: boolean) => setLaunchAtLogin(on))
   ipcMain.handle('window', (_e, cmd: 'minimize' | 'close' | 'reload') => {
@@ -379,16 +382,48 @@ function createTray(): void {
   const icon = trayIcon(false)
   tray = new Tray(icon || nativeImage.createEmpty())
   tray.setToolTip('Octopus Mail')
-  tray.setContextMenu(
+  buildTrayMenu()
+  tray.on('click', showWindow)
+}
+
+function buildTrayMenu(): void {
+  tray?.setContextMenu(
     Menu.buildFromTemplate([
-      { label: 'Otwórz Octopus Mail', click: showWindow },
-      { label: 'Nowa wiadomość', click: () => (showWindow(), send('command', 'compose')) },
-      { label: 'Synchronizuj teraz', click: () => void backend.call('syncNow', []).catch(() => undefined) },
+      { label: t('Open Octopus Mail'), click: showWindow },
+      { label: t('New message'), click: () => (showWindow(), send('command', 'compose')) },
+      { label: t('Sync now'), click: () => void backend.call('syncNow', []).catch(() => undefined) },
       { type: 'separator' },
-      { label: 'Zakończ', click: () => ((quitting = true), app.quit()) },
+      { label: t('Quit'), click: () => ((quitting = true), app.quit()) },
     ]),
   )
-  tray.on('click', showWindow)
+}
+
+// ---------- language ----------
+
+/** Language the tray menu and window title were last built in. */
+let labelsLang: Lang | null = null
+
+/** OS display language (e.g. "pl-PL"), which the app follows when settings.language is "auto". */
+function osLocale(): string {
+  return app.getPreferredSystemLanguages()[0] ?? app.getLocale()
+}
+
+/** Apply settings.language (or the OS language for "auto") to this process; relabel what main has built. */
+function applyLanguage(): void {
+  let setting: LangSetting = 'auto'
+  try {
+    setting = backend.settings().language
+  } catch {
+    /* database not available yet: follow the OS */
+  }
+  initLang(setting, osLocale())
+  if (getLang() === labelsLang) return
+  labelsLang = getLang()
+  if (tray) {
+    buildTrayMenu()
+    void updateBadge() // tooltip
+  }
+  if (isolatedProfile && win && !win.isDestroyed()) win.setTitle(demoTitle())
 }
 
 /** Restart into the other mode after pairing with / leaving a home server. */
@@ -402,6 +437,8 @@ app.whenReady().then(async () => {
   registerIpc()
   registerCidProtocol()
   backend.onEvent(forwardEvent)
+  backend.onSettingsChanged(applyLanguage)
+  applyLanguage()
   Menu.setApplicationMenu(null)
   createTray()
   // started with Windows (--hidden): stay in the tray until the user opens the window
@@ -413,6 +450,8 @@ app.whenReady().then(async () => {
   } catch (e) {
     log('main', 'engine start failed', (e as Error).message)
   }
+  // the engine sets its language from the process locale; the app follows the OS display language
+  applyLanguage()
   void updateBadge()
 })
 

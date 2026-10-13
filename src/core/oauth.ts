@@ -4,6 +4,7 @@
 import crypto from 'node:crypto'
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { t } from '../shared/i18n'
 import { getKV } from './settings'
 import { getSecret, oauthSecretKey, setSecret } from './secrets'
 
@@ -88,8 +89,8 @@ export async function startOAuth(
   if (!client) {
     throw new Error(
       provider === 'google'
-        ? 'Brak Google OAuth Client ID. Ustawienia → Konta → OAuth: wklej Client ID i Secret z Google Cloud Console (typ: Desktop app).'
-        : 'Brak Microsoft OAuth Client ID. Ustawienia → Konta → OAuth: wklej Application (client) ID z Azure Portal.',
+        ? t('No Google OAuth Client ID. Settings → Accounts → OAuth: paste the Client ID and Secret from Google Cloud Console (type: Desktop app).')
+        : t('No Microsoft OAuth Client ID. Settings → Accounts → OAuth: paste the Application (client) ID from Azure Portal.'),
     )
   }
   const ep = ENDPOINTS[provider]
@@ -121,7 +122,7 @@ export async function startOAuth(
   const done = new Promise<OAuthTokens>((resolve, reject) => {
     const timer = setTimeout(() => {
       server.close()
-      reject(new Error('Logowanie OAuth przekroczyło czas (10 min).'))
+      reject(new Error(t('OAuth sign-in timed out (10 min).')))
     }, 10 * 60_000)
 
     server.on('request', async (req, res) => {
@@ -133,25 +134,25 @@ export async function startOAuth(
       const finish = (ok: boolean, msg: string) => {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
         res.end(
-          `<html><body style="font-family:system-ui;padding:40px;text-align:center"><h2>${ok ? '✅' : '❌'} Octopus Mail</h2><p>${msg}</p><p>Możesz zamknąć to okno.</p></body></html>`,
+          `<html><body style="font-family:system-ui;padding:40px;text-align:center"><h2>${ok ? '✅' : '❌'} Octopus Mail</h2><p>${msg}</p><p>${t('You can close this window.')}</p></body></html>`,
         )
         clearTimeout(timer)
         server.close()
       }
       if (u.searchParams.get('state') !== state) {
-        finish(false, 'Nieprawidłowy parametr state.')
+        finish(false, t('Invalid state parameter.'))
         reject(new Error('OAuth state mismatch'))
         return
       }
       const err = u.searchParams.get('error')
       if (err) {
-        finish(false, `Odmowa dostępu: ${err}`)
+        finish(false, t('Access denied: {error}', { error: err }))
         reject(new Error(`OAuth: ${err}`))
         return
       }
       const code = u.searchParams.get('code')
       if (!code) {
-        finish(false, 'Brak kodu autoryzacji.')
+        finish(false, t('No authorization code.'))
         reject(new Error('OAuth: no code'))
         return
       }
@@ -179,7 +180,7 @@ export async function startOAuth(
           email: decodeJwtEmail(j.id_token),
           scope: j.scope,
         }
-        finish(true, `Zalogowano${tokens.email ? ` jako ${tokens.email}` : ''}.`)
+        finish(true, tokens.email ? t('Signed in as {email}.', { email: tokens.email }) : t('Signed in.'))
         resolve(tokens)
       } catch (e) {
         finish(false, (e as Error).message)
@@ -209,32 +210,32 @@ const refreshing = new Map<number, Promise<OAuthTokens>>()
 
 /** Returns a valid access token, refreshing it when it is about to expire. */
 export async function getAccessToken(accountId: number): Promise<string> {
-  const t = loadTokens(accountId)
-  if (!t) throw new Error('Brak tokenu OAuth — zaloguj się ponownie w ustawieniach konta.')
-  if (t.expires_at - Date.now() > 120_000) return t.access_token
-  if (!t.refresh_token) throw new Error('Token OAuth wygasł — zaloguj się ponownie.')
+  const tok = loadTokens(accountId)
+  if (!tok) throw new Error(t('No OAuth token — sign in again in the account settings.'))
+  if (tok.expires_at - Date.now() > 120_000) return tok.access_token
+  if (!tok.refresh_token) throw new Error(t('The OAuth token has expired — sign in again.'))
   let p = refreshing.get(accountId)
   if (!p) {
     p = (async () => {
-      const client = getOAuthClient(t.provider)
-      if (!client) throw new Error('Brak konfiguracji OAuth Client ID.')
+      const client = getOAuthClient(tok.provider)
+      if (!client) throw new Error(t('OAuth Client ID is not configured.'))
       const body = new URLSearchParams({
         grant_type: 'refresh_token',
-        refresh_token: t.refresh_token!,
+        refresh_token: tok.refresh_token!,
         client_id: client.clientId,
       })
       if (client.clientSecret) body.set('client_secret', client.clientSecret)
-      const r = await fetch(ENDPOINTS[t.provider].token, {
+      const r = await fetch(ENDPOINTS[tok.provider].token, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body,
       })
       const j = (await r.json()) as Record<string, any>
-      if (!r.ok) throw new Error(`Odświeżenie tokenu OAuth nie powiodło się: ${j.error_description || j.error}`)
+      if (!r.ok) throw new Error(t('Refreshing the OAuth token failed: {error}', { error: j.error_description || j.error }))
       const next: OAuthTokens = {
-        ...t,
+        ...tok,
         access_token: j.access_token,
-        refresh_token: j.refresh_token || t.refresh_token,
+        refresh_token: j.refresh_token || tok.refresh_token,
         expires_at: Date.now() + (Number(j.expires_in) || 3600) * 1000,
       }
       saveTokens(accountId, next)

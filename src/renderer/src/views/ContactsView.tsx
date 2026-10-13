@@ -2,6 +2,7 @@ import {
   ArrowDownLeft, ArrowUpRight, Ban, Building, ChevronLeft, Copy, Inbox, Phone, RefreshCw, Search, Send, ShieldCheck, ShieldOff, ShieldX, Star, StickyNote, UserRound, Users,
 } from 'lucide-react'
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
+import { t, tp } from '../../../shared/i18n'
 import type { Category, Contact, CoreEvent } from '../../../shared/types'
 import DrawerButton from '../components/DrawerButton'
 import { Avatar, Button, cx, Empty, Field, IconButton, inputCls, Select, Spinner, Toggle } from '../components/ui'
@@ -30,25 +31,18 @@ interface RecentMessage {
 const PAGE = 200
 
 const CATEGORY: Record<Category, { label: string; cls: string }> = {
-  people: { label: 'Ludzie', cls: 'bg-people/12 text-people' },
-  notification: { label: 'Powiadomienia', cls: 'bg-notification/12 text-notification' },
-  newsletter: { label: 'Newslettery', cls: 'bg-newsletter/12 text-newsletter' },
+  people: { label: t('People'), cls: 'bg-people/12 text-people' },
+  notification: { label: t('Notifications'), cls: 'bg-notification/12 text-notification' },
+  newsletter: { label: t('Newsletters'), cls: 'bg-newsletter/12 text-newsletter' },
 }
 
 const STATUS_LABEL: Record<Contact['status'], string> = {
-  accepted: 'Zaakceptowany nadawca',
-  unknown: 'Nowy nadawca (niezaakceptowany)',
-  blocked: 'Zablokowany',
+  accepted: t('Accepted sender'),
+  unknown: t('New sender (not accepted)'),
+  blocked: t('Blocked sender'),
 }
 
-const SOURCE_LABEL: Record<string, string> = { google: 'Google Contacts', manual: 'dodany ręcznie' }
-
-function plural(n: number, one: string, few: string, many: string): string {
-  if (n === 1) return one
-  const d = n % 10
-  const h = n % 100
-  return d >= 2 && d <= 4 && (h < 12 || h > 14) ? few : many
-}
+const SOURCE_LABEL: Record<string, string> = { google: 'Google Contacts', manual: t('added manually') }
 
 const addrOf = (c: Pick<Contact, 'email' | 'name'>) => ({ email: c.email, name: c.name || undefined })
 
@@ -105,7 +99,7 @@ function ContactRow({ c, active, onClick }: { c: Contact; active: boolean; onCli
         <div className="truncate text-[12px] text-muted">{c.email}</div>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-0.5">
-        {c.status === 'blocked' && <Badge cls="bg-danger/12 text-danger">zablokowany</Badge>}
+        {c.status === 'blocked' && <Badge cls="bg-danger/12 text-danger">{t('blocked')}</Badge>}
         {cat && c.status !== 'blocked' && <Badge cls={cat.cls}>{cat.label}</Badge>}
       </div>
     </button>
@@ -181,7 +175,7 @@ function ContactCard({ email, version, onChanged }: { email: string; version: nu
       const f = formOf(c)
       setSaved(f)
       setForm(f)
-      toast({ level: 'success', message: 'Zapisano kontakt' })
+      toast({ level: 'success', message: t('Contact saved') })
       onChanged()
     } catch (e) {
       toast({ level: 'error', message: errorText(e) })
@@ -192,9 +186,9 @@ function ContactCard({ email, version, onChanged }: { email: string; version: nu
   const copy = async () => {
     try {
       await copyText(email)
-      toast({ level: 'success', message: 'Skopiowano adres e-mail' })
+      toast({ level: 'success', message: t('Email address copied') })
     } catch {
-      toast({ level: 'error', message: 'Nie udało się skopiować adresu' })
+      toast({ level: 'error', message: t("Couldn't copy the address") })
     }
   }
 
@@ -223,7 +217,7 @@ function ContactCard({ email, version, onChanged }: { email: string; version: nu
             </div>
             <div className="flex items-center gap-1">
               <span className="selectable truncate text-[13.5px] text-muted">{email}</span>
-              <IconButton title="Kopiuj adres" onClick={() => void copy()}><Copy size={13} /></IconButton>
+              <IconButton title={t('Copy address')} onClick={() => void copy()}><Copy size={13} /></IconButton>
             </div>
             <div className="mt-1 flex flex-wrap gap-1">
               <Badge cls={status === 'blocked' ? 'bg-danger/12 text-danger' : status === 'accepted' ? 'bg-success/12 text-success' : 'bg-warning/15 text-warning'}>
@@ -238,55 +232,55 @@ function ContactCard({ email, version, onChanged }: { email: string; version: nu
         <div className="flex flex-wrap gap-2">
           {!isDomain && (
             <Button variant="primary" onClick={() => compose({ mode: 'new', prefill: { to: [email] } })}>
-              <Send size={14} /> Napisz
+              <Send size={14} /> {t('Write')}
             </Button>
           )}
           <Button onClick={() => openMail()}>
-            <Inbox size={14} /> Wszystkie wiadomości
+            <Inbox size={14} /> {t('All messages')}
           </Button>
           <span className="flex-1" />
           {status === 'unknown' && (
-            <Button variant="outline" onClick={() => void run(api.acceptSenders([email]), 'Zaakceptowano nadawcę')}>
-              <ShieldCheck size={14} /> Akceptuj
+            <Button variant="outline" onClick={() => void run(api.acceptSenders([email]), t('Sender accepted'))}>
+              <ShieldCheck size={14} /> {t('Accept')}
             </Button>
           )}
           {status === 'blocked' ? (
-            <Button variant="outline" onClick={() => void run(api.unblockSenders([email]), 'Odblokowano nadawcę')}>
-              <ShieldOff size={14} /> Odblokuj
+            <Button variant="outline" onClick={() => void run(api.unblockSenders([email]), t('Sender unblocked'))}>
+              <ShieldOff size={14} /> {t('Unblock')}
             </Button>
           ) : (
-            <Button variant="outline" onClick={() => void run(api.blockSenders([email]), 'Zablokowano nadawcę')}>
-              <span className="inline-flex items-center gap-1.5 text-danger"><ShieldX size={14} /> Zablokuj</span>
+            <Button variant="outline" onClick={() => void run(api.blockSenders([email]), t('Sender blocked'))}>
+              <span className="inline-flex items-center gap-1.5 text-danger"><ShieldX size={14} /> {t('Block')}</span>
             </Button>
           )}
         </div>
 
         <div className="grid grid-cols-2 max-md:grid-cols-1 gap-4">
-          <Card title="Statystyki">
+          <Card title={t('Statistics')}>
             <div className="grid grid-cols-2 max-md:grid-cols-1 gap-3">
-              <Stat label="Wysłane do" value={c?.sent_count ?? 0} />
-              <Stat label="Odebrane od" value={c?.recv_count ?? 0} />
+              <Stat label={t('Sent to')} value={c?.sent_count ?? 0} />
+              <Stat label={t('Received from')} value={c?.recv_count ?? 0} />
             </div>
             <div className="mt-3 text-[12.5px] text-muted">
-              Ostatni kontakt: <span className="text-fg">{lastContact ? fullDate(lastContact) : 'brak'}</span>
+              {t('Last contact:')} <span className="text-fg">{lastContact ? fullDate(lastContact) : t('none')}</span>
             </div>
           </Card>
-          <Card title="Nadawca">
+          <Card title={t('Sender')}>
             <Toggle
               checked={!!c?.vip}
-              onChange={(on) => void run(api.prioritySender([email], on), on ? 'Nadawca priorytetowy' : 'Usunięto priorytet')}
-              label="Priorytetowy (VIP)"
-              hint="Wiadomości trafiają na górę Smart Inbox."
+              onChange={(on) => void run(api.prioritySender([email], on), on ? t('Priority sender') : t('Priority removed'))}
+              label={t('Priority (VIP)')}
+              hint={t('Their messages go to the top of Smart Inbox.')}
             />
-            <Field label="Kategoria">
+            <Field label={t('Category')}>
               <Select<Category | ''>
                 value={c?.category ?? ''}
-                onChange={(v) => v && void run(api.changeSenderCategory([email], v), 'Zmieniono kategorię')}
+                onChange={(v) => v && void run(api.changeSenderCategory([email], v), t('Category changed'))}
                 options={[
-                  ...(c?.category ? [] : [{ value: '' as const, label: 'Automatycznie' }]),
-                  { value: 'people', label: 'Ludzie' },
-                  { value: 'notification', label: 'Powiadomienia' },
-                  { value: 'newsletter', label: 'Newslettery' },
+                  ...(c?.category ? [] : [{ value: '' as const, label: t('Automatic') }]),
+                  { value: 'people', label: t('People') },
+                  { value: 'notification', label: t('Notifications') },
+                  { value: 'newsletter', label: t('Newsletters') },
                 ]}
               />
             </Field>
@@ -294,34 +288,34 @@ function ContactCard({ email, version, onChanged }: { email: string; version: nu
         </div>
 
         <Card
-          title="Dane kontaktowe"
+          title={t('Contact details')}
           right={
             dirty && (
               <div className="flex gap-1.5">
-                <Button size="sm" variant="ghost" onClick={() => setForm(saved)}>Anuluj</Button>
+                <Button size="sm" variant="ghost" onClick={() => setForm(saved)}>{t('Cancel')}</Button>
                 <Button size="sm" variant="primary" disabled={busy} onClick={() => void save()}>
-                  {busy && <Spinner className="h-3.5 w-3.5" />} Zapisz
+                  {busy && <Spinner className="h-3.5 w-3.5" />} {t('Save')}
                 </Button>
               </div>
             )
           }
         >
           <div className="grid grid-cols-2 max-md:grid-cols-1 gap-x-4" onKeyDown={(e) => e.key === 'Enter' && (e.ctrlKey || e.metaKey) && dirty && void save()}>
-            <Field label={<span className="flex items-center gap-1.5"><UserRound size={12} /> Imię i nazwisko</span>}>
+            <Field label={<span className="flex items-center gap-1.5"><UserRound size={12} /> {t('Full name')}</span>}>
               <input className={inputCls} value={form.name} placeholder={email.split('@')[0]} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </Field>
-            <Field label={<span className="flex items-center gap-1.5"><Phone size={12} /> Telefon</span>}>
-              <input className={inputCls} value={form.phone} placeholder="+48 …" onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            <Field label={<span className="flex items-center gap-1.5"><Phone size={12} /> {t('Phone')}</span>}>
+              <input className={inputCls} value={form.phone} placeholder={t('+1 …')} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
             </Field>
             <div className="col-span-2">
-              <Field label={<span className="flex items-center gap-1.5"><Building size={12} /> Firma</span>}>
+              <Field label={<span className="flex items-center gap-1.5"><Building size={12} /> {t('Company')}</span>}>
                 <input className={inputCls} value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
               </Field>
-              <Field label={<span className="flex items-center gap-1.5"><StickyNote size={12} /> Notatki</span>}>
+              <Field label={<span className="flex items-center gap-1.5"><StickyNote size={12} /> {t('Notes')}</span>}>
                 <textarea
                   className={cx(inputCls, 'h-20 resize-y py-2 leading-snug')}
                   value={form.notes}
-                  placeholder="Widoczne tylko dla Ciebie"
+                  placeholder={t('Only visible to you')}
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
                 />
               </Field>
@@ -330,22 +324,22 @@ function ContactCard({ email, version, onChanged }: { email: string; version: nu
         </Card>
 
         <Card
-          title="Ostatnie wiadomości"
-          right={recent && recent.length > 0 ? <Button size="sm" variant="ghost" onClick={() => openMail()}>Pokaż wszystkie</Button> : undefined}
+          title={t('Recent messages')}
+          right={recent && recent.length > 0 ? <Button size="sm" variant="ghost" onClick={() => openMail()}>{t('Show all')}</Button> : undefined}
         >
           {!recent ? (
             <div className="flex justify-center p-4 text-muted"><Spinner /></div>
           ) : !recent.length ? (
-            <div className="py-2 text-[12.5px] text-muted">Brak wiadomości z tym kontaktem w pobranej poczcie.</div>
+            <div className="py-2 text-[12.5px] text-muted">{t('No messages with this contact in downloaded mail.')}</div>
           ) : (
             <div className="-mx-2 flex flex-col">
               {recent.map((m) => (
                 <button key={m.id} onClick={() => openMail(m.thread_id)} className="flex items-start gap-2.5 rounded-lg px-2 py-2 text-left hover:bg-hover">
-                  <span className={cx('mt-0.5 shrink-0', m.is_outgoing ? 'text-accent' : 'text-muted')} title={m.is_outgoing ? 'Wysłana' : 'Odebrana'}>
+                  <span className={cx('mt-0.5 shrink-0', m.is_outgoing ? 'text-accent' : 'text-muted')} title={m.is_outgoing ? t('Sent message') : t('Received message')}>
                     {m.is_outgoing ? <ArrowUpRight size={15} /> : <ArrowDownLeft size={15} />}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-medium">{m.subject || '(bez tematu)'}</span>
+                    <span className="block truncate text-[13px] font-medium">{m.subject || t('(no subject)')}</span>
                     <span className="line-clamp-1 text-[12px] text-muted">{m.snippet || ' '}</span>
                   </span>
                   <span className="shrink-0 text-[12px] tabular-nums text-muted">{listDate(m.date)}</span>
@@ -462,7 +456,7 @@ export default function ContactsView() {
 
   const syncGoogle = async () => {
     if (!accounts.some((a) => a.auth === 'oauth-google')) {
-      toast({ level: 'info', message: 'Brak kont Google zalogowanych przez OAuth — dodaj konto Google w Ustawieniach → Konta.' })
+      toast({ level: 'info', message: t('No Google accounts signed in with OAuth — add a Google account in Settings → Accounts.') })
       return
     }
     setSyncing(true)
@@ -470,8 +464,8 @@ export default function ContactsView() {
       const n = await api.syncContacts()
       toast(
         n
-          ? { level: 'success', message: `Zsynchronizowano ${n} ${plural(n, 'adres', 'adresy', 'adresów')} z Google Contacts` }
-          : { level: 'info', message: 'Nie pobrano żadnych kontaktów z Google — sprawdź, czy konto ma dostęp do Google Contacts.' },
+          ? { level: 'success', message: tp(n, 'Synced {n} address from Google Contacts', 'Synced {n} addresses from Google Contacts') }
+          : { level: 'info', message: t('No contacts were downloaded from Google — check that the account has access to Google Contacts.') },
       )
       afterChange()
     } catch (e) {
@@ -517,9 +511,9 @@ export default function ContactsView() {
       <section className={cx('flex h-full w-[340px] shrink-0 flex-col border-r border-line bg-surface', narrow && (selected ? 'hidden' : 'w-full border-r-0'))}>
         <div className="flex h-12 shrink-0 items-center gap-2 border-b border-line pl-3.5 pr-2 max-md:pl-2">
           <DrawerButton />
-          <div className="flex-1 truncate text-[15px] font-semibold">Kontakty</div>
-          <Button size="sm" variant="ghost" disabled={syncing} onClick={() => void syncGoogle()} title="Pobierz książkę adresową z kont Google (OAuth)">
-            <RefreshCw size={13} className={cx(syncing && 'animate-spin')} /> {narrow ? 'Google' : 'Synchronizuj kontakty Google'}
+          <div className="flex-1 truncate text-[15px] font-semibold">{t('Contacts')}</div>
+          <Button size="sm" variant="ghost" disabled={syncing} onClick={() => void syncGoogle()} title={t('Download the address book from your Google accounts (OAuth)')}>
+            <RefreshCw size={13} className={cx(syncing && 'animate-spin')} /> {narrow ? 'Google' : t('Sync Google contacts')}
           </Button>
         </div>
         <div className="shrink-0 border-b border-line p-2.5">
@@ -527,15 +521,15 @@ export default function ContactsView() {
             <Search size={15} className="absolute left-3 top-2.5 text-muted" />
             <input
               className={cx(inputCls, 'pl-9')}
-              placeholder="Szukaj po nazwie lub adresie…"
+              placeholder={t('Search by name or address…')}
               value={q}
               onChange={(e) => setQ(e.target.value)}
               onKeyDown={(e) => e.key === 'Escape' && q && (e.stopPropagation(), setQ(''))}
             />
           </div>
           <div className="mt-2 flex gap-1.5">
-            {chip('all', 'Wszystkie')}
-            {chip('blocked', 'Zablokowani', blockedCount)}
+            {chip('all', t('All'))}
+            {chip('blocked', t('Blocked senders'), blockedCount)}
           </div>
         </div>
         <div ref={scrollRef} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto">
@@ -548,13 +542,13 @@ export default function ContactsView() {
           {!loading && !list.length && (
             <Empty
               icon={filter === 'blocked' ? <Ban size={32} /> : <Users size={32} />}
-              title={query ? 'Nic nie znaleziono' : filter === 'blocked' ? 'Nikogo nie zablokowano' : 'Brak kontaktów'}
+              title={query ? t('Nothing found') : filter === 'blocked' ? t('No one is blocked') : t('No contacts')}
               hint={
                 query
-                  ? `Brak kontaktów pasujących do „${query}”.`
+                  ? t('No contacts match “{query}”.', { query })
                   : filter === 'blocked'
-                    ? 'Zablokowani nadawcy trafiają tutaj — ich wiadomości nie pojawiają się w skrzynce.'
-                    : 'Kontakty tworzą się same z korespondencji. Możesz też pobrać książkę adresową z Google.'
+                    ? t("Blocked senders appear here — their messages don't show up in your inbox.")
+                    : t('Contacts are created automatically from your mail. You can also download your address book from Google.')
               }
             />
           )}
@@ -563,13 +557,13 @@ export default function ContactsView() {
       <div className={cx('flex min-w-0 flex-1 flex-col bg-bg', narrow && !selected && 'hidden')}>
         {narrow && selected && (
           <button className="flex h-10 shrink-0 items-center gap-1 border-b border-line px-2 text-[14px] text-accent" onClick={() => setSelected(null)}>
-            <ChevronLeft size={18} /> Kontakty
+            <ChevronLeft size={18} /> {t('Contacts')}
           </button>
         )}
         {selected ? (
           <ContactCard key={selected} email={selected} version={version} onChanged={afterChange} />
         ) : (
-          <Empty icon={<NoContact />} title="Wybierz kontakt" hint="Zobaczysz tu dane kontaktu, statystyki korespondencji i ostatnie wiadomości." />
+          <Empty icon={<NoContact />} title={t('Select a contact')} hint={t("You'll see contact details, mail statistics and recent messages here.")} />
         )}
       </div>
     </div>

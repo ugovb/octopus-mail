@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { ImapFlow, type FetchMessageObject, type ListResponse, type MailboxObject } from 'imapflow'
+import { t } from '../shared/i18n'
 import type { Account, Address, FolderRole, SyncStatus } from '../shared/types'
 import { getAccount, imapAuth, imapOptions, listAccounts, myAddresses } from './accounts'
 import { all, get, inList, insert, now, parseJson, type Row, run, tx, update } from './db'
@@ -151,7 +152,7 @@ export class AccountSync {
 
   private fail(e: unknown) {
     const err = e as Error & { responseText?: string; authenticationFailed?: boolean }
-    const msg = err.authenticationFailed ? 'Logowanie nieudane — sprawdź hasło' : err.responseText || err.message || String(e)
+    const msg = err.authenticationFailed ? t('Sign-in failed — check the password') : err.responseText || err.message || String(e)
     log('sync', this.acc.email, 'error:', msg)
     run('UPDATE accounts SET last_error = ? WHERE id = ?', msg, this.acc.id)
     this.setStatus('error', null, msg)
@@ -639,7 +640,7 @@ export class AccountSync {
   /** Download the text/html parts of a message and store them. */
   async fetchBody(messageId: number): Promise<void> {
     const m = get('SELECT * FROM messages WHERE id = ?', messageId)
-    if (!m) throw new Error('Wiadomość nie istnieje')
+    if (!m) throw new Error(t('Message does not exist'))
     const f = get('SELECT * FROM folders WHERE id = ?', m.folder_id)!
     const s = parseJson<{ html: string[]; text: string[]; charset: Record<string, string>; encoding?: Record<string, string> }>(m.structure, { html: [], text: [], charset: {} })
     const parts = [...s.html.slice(0, 4), ...s.text.slice(0, 4)]
@@ -706,13 +707,13 @@ export class AccountSync {
 
   async downloadAttachment(attId: number): Promise<string> {
     const a = get('SELECT * FROM attachments WHERE id = ?', attId)
-    if (!a) throw new Error('Załącznik nie istnieje')
+    if (!a) throw new Error(t('Attachment does not exist'))
     if (a.path && fs.existsSync(a.path)) return a.path
     const m = get('SELECT * FROM messages WHERE id = ?', a.message_id)!
     const f = get('SELECT * FROM folders WHERE id = ?', m.folder_id)!
     const dir = path.join(attachmentsDir(), String(m.account_id), String(m.id))
     fs.mkdirSync(dir, { recursive: true })
-    const safe = String(a.filename || 'plik').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 150)
+    const safe = String(a.filename || t('file')).replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 150)
     const file = path.join(dir, `${a.part.replace(/\./g, '_')}-${safe}`)
     const c = await this.conn()
     const lock = await c.getMailboxLock(f.path)
@@ -721,7 +722,7 @@ export class AccountSync {
         // raw part + the encoding recorded from BODYSTRUCTURE: independent of "<part>.MIME" support
         const raw = await c.fetchOne(String(m.uid), { uid: true, bodyParts: [a.part] }, { uid: true })
         const buf = raw ? raw.bodyParts?.get(a.part) : undefined
-        if (!buf) throw new Error('Serwer nie zwrócił załącznika')
+        if (!buf) throw new Error(t('The server did not return the attachment'))
         fs.writeFileSync(file, decodeTransfer(buf, a.encoding))
       } else {
         // very large files are streamed to disk
@@ -744,7 +745,7 @@ export class AccountSync {
   /** Download one decoded MIME part (e.g. the text/calendar part of an invitation). */
   async downloadPart(messageId: number, part: string): Promise<{ content: Buffer; charset?: string; contentType?: string }> {
     const m = get('SELECT * FROM messages WHERE id = ?', messageId)
-    if (!m) throw new Error('Wiadomość nie istnieje')
+    if (!m) throw new Error(t('Message does not exist'))
     const f = get('SELECT * FROM folders WHERE id = ?', m.folder_id)!
     const c = await this.conn()
     const lock = await c.getMailboxLock(f.path)
@@ -752,7 +753,7 @@ export class AccountSync {
       // raw part + BODYSTRUCTURE in one round trip; decoding never depends on "<part>.MIME" support
       const raw = await c.fetchOne(String(m.uid), { uid: true, bodyStructure: true, bodyParts: [part] }, { uid: true })
       const buf = raw ? raw.bodyParts?.get(part) : undefined
-      if (!raw || !buf) throw new Error(`Brak części ${part}`)
+      if (!raw || !buf) throw new Error(t('Part {part} is missing', { part }))
       const node = findNode(raw.bodyStructure as never, part) as { encoding?: string; type?: string; parameters?: Record<string, string> } | null
       return { content: decodeTransfer(buf, node?.encoding || null), charset: node?.parameters?.charset, contentType: node?.type }
     } finally {

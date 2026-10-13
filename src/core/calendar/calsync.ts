@@ -1,5 +1,6 @@
 // Calendar synchronisation: CalDAV (incl. Google) with sync-collection / ctag shortcuts and a
 // windowed full re-fetch, and read-only ICS subscriptions over HTTP(S)/webcal.
+import { t } from '../../shared/i18n'
 import { myAddresses } from '../accounts'
 import { all, get, inList, now, parseJson, run, tx } from '../db'
 import { log } from '../events'
@@ -29,7 +30,7 @@ export async function syncCalendars(sourceId?: number): Promise<void> {
   let sources: SourceRow[]
   if (sourceId != null) {
     const s = getSource(sourceId)
-    if (!s) throw new Error(`Nie ma źródła kalendarza o id ${sourceId}`)
+    if (!s) throw new Error(t('No calendar source with id {id}', { id: sourceId }))
     sources = [s]
   } else {
     sources = all<SourceRow>("SELECT * FROM cal_sources WHERE enabled = 1 AND kind != 'local' ORDER BY id")
@@ -46,7 +47,7 @@ export async function syncCalendars(sourceId?: number): Promise<void> {
       log('calendar', `sync of source ${src.id} (${src.name}) failed:`, msg)
       if (src.last_error !== msg) changed = true
       run('UPDATE cal_sources SET last_error = ? WHERE id = ?', msg, src.id)
-      if (/logowania|401|token/i.test(msg)) dropClient(src.id)
+      if (/logowania|login|401|token/i.test(msg)) dropClient(src.id)
       failure = failure ?? new Error(`${src.name}: ${msg}`)
     }
   }
@@ -114,7 +115,7 @@ async function syncDavSource(src: SourceRow): Promise<boolean> {
     try {
       if (await syncDavCalendar(conn, row, rc)) changed = true
     } catch (e) {
-      throw new Error(`Kalendarz „${row.name}”: ${davErrorMessage(e)}`)
+      throw new Error(t('Calendar “{name}”: {error}', { name: row.name, error: davErrorMessage(e) }))
     }
   }
   return changed
@@ -199,7 +200,7 @@ export function normalizeFeedUrl(url: string): string {
   try {
     return new URL(u).href
   } catch {
-    throw new Error('Nieprawidłowy adres kalendarza.')
+    throw new Error(t('This calendar address is not valid.'))
   }
 }
 
@@ -214,11 +215,11 @@ export async function fetchFeed(url: string, conditional?: { etag?: string | nul
     throw new Error(davErrorMessage(e))
   }
   if (res.status === 304) return { status: 304, body: '', etag: conditional?.etag ?? null, lastModified: conditional?.lastModified ?? null }
-  if (res.status === 401 || res.status === 403) throw new Error(`Subskrypcja kalendarza wymaga autoryzacji (HTTP ${res.status}) — sprawdź, czy link jest prywatnym adresem iCal.`)
-  if (res.status === 404) throw new Error('Pod tym adresem nie ma kalendarza (HTTP 404).')
-  if (!res.ok) throw new Error(`Serwer subskrypcji odpowiedział HTTP ${res.status}.`)
+  if (res.status === 401 || res.status === 403) throw new Error(t('The calendar subscription requires authorization (HTTP {status}) — check that the link is a private iCal address.', { status: res.status }))
+  if (res.status === 404) throw new Error(t('There is no calendar at this address (HTTP 404).'))
+  if (!res.ok) throw new Error(t('The subscription server responded with HTTP {status}.', { status: res.status }))
   const body = await res.text()
-  if (!/BEGIN:VCALENDAR/i.test(body)) throw new Error('Pod tym adresem nie ma kalendarza w formacie iCalendar (.ics).')
+  if (!/BEGIN:VCALENDAR/i.test(body)) throw new Error(t('There is no iCalendar (.ics) calendar at this address.'))
   return { status: res.status, body, etag: res.headers.get('etag'), lastModified: res.headers.get('last-modified') }
 }
 

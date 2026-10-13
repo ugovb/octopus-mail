@@ -3,6 +3,7 @@
 import crypto from 'node:crypto'
 import nodemailer from 'nodemailer'
 import MailComposer from 'nodemailer/lib/mail-composer'
+import { dateLocale, t } from '../../shared/i18n'
 import type { Account, Address } from '../../shared/types'
 import { findAccount, getAccount, listAccounts, smtpAuth } from '../accounts'
 import { get } from '../db'
@@ -116,7 +117,7 @@ export function senderFor(email: string | null | undefined, fallback: Account | 
   return null
 }
 
-// ---------- Polish texts ----------
+// ---------- texts (in the UI language) ----------
 
 function userTz(): string | undefined {
   return getSettings().timeZone || undefined
@@ -124,13 +125,13 @@ function userTz(): string | undefined {
 
 export function fmtWhen(start: number, end: number, allDay: boolean): string {
   const tz = allDay ? undefined : userTz()
-  const date = new Intl.DateTimeFormat('pl-PL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: tz })
-  const time = new Intl.DateTimeFormat('pl-PL', { hour: '2-digit', minute: '2-digit', timeZone: tz })
+  const date = new Intl.DateTimeFormat(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: tz })
+  const time = new Intl.DateTimeFormat(dateLocale(), { hour: '2-digit', minute: '2-digit', timeZone: tz })
   if (allDay) {
     const last = end - 1
     const a = date.format(start)
     const b = date.format(Math.max(start, last))
-    return a === b ? `${a} (cały dzień)` : `${a} – ${b}`
+    return a === b ? t('{date} (all day)', { date: a }) : `${a} – ${b}`
   }
   const sameDay = date.format(start) === date.format(end)
   return sameDay ? `${date.format(start)}, ${time.format(start)}–${time.format(end)}` : `${date.format(start)} ${time.format(start)} – ${date.format(end)} ${time.format(end)}`
@@ -151,53 +152,54 @@ export interface DescribedEvent {
 const nameOf = (a: Address) => (a.name ? `${a.name} <${a.email}>` : a.email)
 
 export function describeEvent(e: DescribedEvent): string {
-  const lines = [e.summary || '(bez tytułu)', '', `Kiedy: ${fmtWhen(e.start, e.end, e.all_day)}`]
-  if (e.location) lines.push(`Gdzie: ${e.location}`)
-  if (e.conference_url && !(e.description || '').includes(e.conference_url)) lines.push(`Dołącz: ${e.conference_url}`)
-  if (e.organizer) lines.push(`Organizator: ${nameOf(e.organizer)}`)
+  const lines = [e.summary || t('(no title)'), '', t('When: {when}', { when: fmtWhen(e.start, e.end, e.all_day) })]
+  if (e.location) lines.push(t('Where: {where}', { where: e.location }))
+  if (e.conference_url && !(e.description || '').includes(e.conference_url)) lines.push(t('Join: {url}', { url: e.conference_url }))
+  if (e.organizer) lines.push(t('Organizer: {name}', { name: nameOf(e.organizer) }))
   const guests = (e.attendees || []).filter((a) => !e.organizer || a.email !== e.organizer.email)
-  if (guests.length) lines.push(`Uczestnicy: ${guests.map(nameOf).join(', ')}`)
+  if (guests.length) lines.push(t('Guests: {names}', { names: guests.map(nameOf).join(', ') }))
   if (e.description) lines.push('', e.description)
   return lines.join('\n')
 }
 
-export const RESPONSE_LABEL: Record<string, string> = {
-  ACCEPTED: 'Zaakceptowano',
-  TENTATIVE: 'Wstępnie zaakceptowano',
-  DECLINED: 'Odrzucono',
-}
-
-const RESPONSE_VERB: Record<string, string> = {
-  ACCEPTED: 'akceptuje',
-  TENTATIVE: 'wstępnie akceptuje',
-  DECLINED: 'odrzuca',
+function responseSentence(who: string, response: string, title: string): string {
+  if (response === 'ACCEPTED') return t('{who} accepted the invitation: {title}', { who, title })
+  if (response === 'TENTATIVE') return t('{who} tentatively accepted the invitation: {title}', { who, title })
+  if (response === 'DECLINED') return t('{who} declined the invitation: {title}', { who, title })
+  return t('{who} {response} the invitation: {title}', { who, response, title })
 }
 
 export function requestSubject(e: DescribedEvent, update: boolean): string {
-  return `${update ? 'Zaktualizowane zaproszenie' : 'Zaproszenie'}: ${e.summary || '(bez tytułu)'} — ${fmtWhen(e.start, e.end, e.all_day)}`
+  const vars = { title: e.summary || t('(no title)'), when: fmtWhen(e.start, e.end, e.all_day) }
+  return update ? t('Updated invitation: {title} — {when}', vars) : t('Invitation: {title} — {when}', vars)
 }
 
 export function requestText(e: DescribedEvent, update: boolean): string {
-  const who = e.organizer ? e.organizer.name || e.organizer.email : 'Organizator'
-  const head = update ? `${who} zaktualizował(a) wydarzenie:` : `${who} zaprasza Cię na wydarzenie:`
-  return `${head}\n\n${describeEvent(e)}\n\nOdpowiedz na zaproszenie w swoim kalendarzu.\n`
+  const who = e.organizer ? e.organizer.name || e.organizer.email : t('Organizer')
+  const head = update ? t('{who} updated the event:', { who }) : t('{who} invited you to an event:', { who })
+  return `${head}\n\n${describeEvent(e)}\n\n${t('Respond to the invitation in your calendar.')}\n`
 }
 
 export function cancelSubject(e: DescribedEvent): string {
-  return `Odwołane: ${e.summary || '(bez tytułu)'} — ${fmtWhen(e.start, e.end, e.all_day)}`
+  return t('Cancelled: {title} — {when}', { title: e.summary || t('(no title)'), when: fmtWhen(e.start, e.end, e.all_day) })
 }
 
 export function cancelText(e: DescribedEvent): string {
-  return `To wydarzenie zostało odwołane:\n\n${describeEvent(e)}\n`
+  return `${t('This event has been cancelled:')}\n\n${describeEvent(e)}\n`
 }
 
+/** Subject of an RSVP reply ("Accepted: …"); unknown responses are shown as they are. */
 export function replySubject(summary: string, response: string): string {
-  return `${RESPONSE_LABEL[response] || response}: ${summary || '(bez tytułu)'}`
+  const title = summary || t('(no title)')
+  if (response === 'ACCEPTED') return t('Accepted: {title}', { title })
+  if (response === 'TENTATIVE') return t('Tentatively accepted: {title}', { title })
+  if (response === 'DECLINED') return t('Declined: {title}', { title })
+  return `${response}: ${title}`
 }
 
 export function replyText(e: DescribedEvent, me: Address, response: string, comment?: string | null): string {
   const who = me.name || me.email
-  const lines = [`${who} ${RESPONSE_VERB[response] || response} zaproszenie: ${e.summary || '(bez tytułu)'}`, `Kiedy: ${fmtWhen(e.start, e.end, e.all_day)}`]
-  if (comment) lines.push('', `Komentarz: ${comment}`)
+  const lines = [responseSentence(who, response, e.summary || t('(no title)')), t('When: {when}', { when: fmtWhen(e.start, e.end, e.all_day) })]
+  if (comment) lines.push('', t('Comment: {comment}', { comment }))
   return lines.join('\n') + '\n'
 }

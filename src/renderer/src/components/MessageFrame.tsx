@@ -2,6 +2,7 @@ import DOMPurify from 'dompurify'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { MessageView } from '../../../shared/types'
 import { cidUrl } from '../lib/web-bridge'
+import { t } from '../../../shared/i18n'
 
 const TRACKER_HOSTS =
   /(^|\.)(list-manage\.com|mailchimp\.com|sendgrid\.net|mandrillapp\.com|mailgun\.org|hubspot\.com|hs-analytics\.net|mixpanel\.com|google-analytics\.com|doubleclick\.net|facebook\.com\/tr|pixel\.|open\.|track\.|tracking\.|email\.mg\.|links\.|click\.|t\.co|exacttarget\.com|sailthru\.com|klaviyo\.com|customer\.io|intercom-mail\.com|mailtrack\.io|getnotify\.com|yesware\.com|streak\.com|bananatag\.com|cirrusinsight\.com|salesloft\.com|outreach\.io|mixmax\.com|superhuman\.com)/i
@@ -184,7 +185,7 @@ export default function MessageFrame({
   return (
     <iframe
       ref={ref}
-      title={`wiadomość ${message.id}`}
+      title={t('message {id}', { id: message.id })}
       sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
       srcDoc={prepared.html}
       className="block w-full rounded-lg border-0"

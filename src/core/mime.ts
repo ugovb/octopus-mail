@@ -1,4 +1,5 @@
 import iconv from 'iconv-lite'
+import { t } from '../shared/i18n'
 import type { Address } from '../shared/types'
 
 export interface StructNode {
@@ -124,10 +125,10 @@ export function analyzeStructure(root: StructNode | undefined): Structure {
 }
 
 function defaultName(type: string, cid: string | null): string {
-  if (type === 'message/rfc822') return 'wiadomosc.eml'
-  if (type === 'text/calendar') return 'zaproszenie.ics'
+  if (type === 'message/rfc822') return t('message.eml')
+  if (type === 'text/calendar') return t('invitation.ics')
   const ext = type.split('/')[1]?.replace(/[^a-z0-9]/g, '') || 'bin'
-  return `${cid ? cid.split('@')[0] : 'zalacznik'}.${ext}`
+  return cid ? `${cid.split('@')[0]}.${ext}` : t('attachment.{ext}', { ext })
 }
 
 export function decodeBuffer(buf: Buffer | null | undefined, charset?: string | null): string {

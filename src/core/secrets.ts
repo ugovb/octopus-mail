@@ -7,6 +7,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { Entry } from '@napi-rs/keyring'
+import { t } from '../shared/i18n'
 import { dataDir } from './paths'
 
 const SERVICE = 'Octopus Mail'
@@ -48,19 +49,19 @@ function switchToFile(e: unknown): void {
   if (!fileFallback) {
     fileFallback = true
     loadedMtime = -1
-    console.warn(`[secrets] Brak usługi Secret Service (${(e as Error).message}) — hasła zapisuję w ${filePath()} (tylko dla właściciela).`)
+    console.warn(`[secrets] No Secret Service (${(e as Error).message}) — storing passwords in ${filePath()} (owner-only).`)
   }
   loadFile()
 }
 
-/** Where secrets are kept, phrased to follow "przechowywane …" in UI messages. */
+/** Where secrets are kept, phrased to follow "Passwords are stored …" ("przechowywane …") in UI messages. */
 export function secretStoreName(): string {
-  if (mode() === 'memory' || mode() === 'file') return 'w profilu testowym'
-  if (mode() === 'server') return 'na serwerze domowym, w pliku dostępnym tylko dla jego właściciela'
-  if (fileFallback) return 'w pliku dostępnym tylko dla Ciebie'
-  if (process.platform === 'win32') return 'w Menedżerze poświadczeń Windows'
-  if (process.platform === 'darwin') return 'w pęku kluczy macOS'
-  return 'w systemowym magazynie haseł (GNOME Keyring / KWallet)'
+  if (mode() === 'memory' || mode() === 'file') return t('in the test profile')
+  if (mode() === 'server') return t('on the home server, in a file only its owner can read')
+  if (fileFallback) return t('in a file only you can read')
+  if (process.platform === 'win32') return t('in Windows Credential Manager')
+  if (process.platform === 'darwin') return t('in the macOS Keychain')
+  return t('in the system password store (GNOME Keyring / KWallet)')
 }
 
 function entry(key: string): Entry {

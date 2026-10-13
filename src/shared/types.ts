@@ -360,7 +360,8 @@ export interface HistoryEntry {
 export interface AppSettings {
   theme: 'system' | 'light' | 'dark'
   density: 'comfortable' | 'compact'
-  language: 'pl' | 'en'
+  /** UI language; 'auto' follows the system (Polish systems → Polish, others → English) */
+  language: 'auto' | 'pl' | 'en'
   smartInbox: boolean
   groupNewsletters: boolean
   groupNotifications: boolean

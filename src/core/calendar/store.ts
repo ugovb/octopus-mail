@@ -1,5 +1,6 @@
 // Calendar tables (cal_sources / calendars / events) and the read-side API:
 // listCalendars, listEvents (with recurrence expansion), getEvent.
+import { t } from '../../shared/i18n'
 import type { Address, CalendarEvent, CalendarInfo } from '../../shared/types'
 import { myAddresses } from '../accounts'
 import { all, get, inList, now, parseJson, run, update } from '../db'
@@ -75,7 +76,7 @@ export interface CalendarOccurrence extends CalendarEvent {
   source_kind: SourceKind
 }
 
-export const READONLY_MSG = 'Ten kalendarz jest tylko do odczytu.'
+export const readonlyMsg = (): string => t('This calendar is read-only.')
 export const DEFAULT_COLOR = '#3b82f6'
 
 export function notifyChanged(): void {
@@ -120,10 +121,10 @@ export function listCalendars(): CalendarInfo[] {
 /** Rename / recolour / show-hide / make default. */
 export function updateCalendar(id: number, patch: { name?: string; color?: string | null; enabled?: boolean; is_default?: boolean }): CalendarInfo {
   const cal = getCalendarRow(id)
-  if (!cal) throw new Error(`Nie ma kalendarza o id ${id}`)
+  if (!cal) throw new Error(t('No calendar with id {id}', { id }))
   if (patch.is_default) {
     const src = getSource(cal.source_id)!
-    if (!isWritable(cal, src)) throw new Error('Kalendarz tylko do odczytu nie może być domyślny.')
+    if (!isWritable(cal, src)) throw new Error(t('A read-only calendar cannot be the default.'))
     run('UPDATE calendars SET is_default = 0 WHERE is_default = 1')
   }
   update('calendars', id, {
@@ -165,9 +166,9 @@ export function ensureDefaultCalendar(preferred: number[] = []): void {
 export function resolveWritableCalendar(calendarId?: number | null, accountId?: number | null): { cal: CalRow; src: SourceRow } | null {
   if (calendarId) {
     const cal = getCalendarRow(calendarId)
-    if (!cal) throw new Error(`Nie ma kalendarza o id ${calendarId}`)
+    if (!cal) throw new Error(t('No calendar with id {id}', { id: calendarId }))
     const src = getSource(cal.source_id)!
-    if (!isWritable(cal, src)) throw new Error(READONLY_MSG)
+    if (!isWritable(cal, src)) throw new Error(readonlyMsg())
     return { cal, src }
   }
   const rows = all<CalRow & { s_kind: string; s_account: number | null }>(

@@ -2,12 +2,14 @@ import os from 'node:os'
 import * as cal from './calendar'
 import { syncAllContacts } from './contacts-sync'
 import { db, get, now, run } from './db'
-import { log } from './events'
+import { bus, log } from './events'
 import { pruneHistory } from './history'
 import { processNewMessages } from './rules'
 import { startScheduler, stopScheduler } from './scheduler'
 import { getKV, setKV } from './settings'
 import { onNewMessages, sync } from './sync'
+import { initLang } from '../shared/i18n'
+import { getSettings } from './settings'
 import { trustSystemCertificates } from './tls'
 
 let inited = false
@@ -18,9 +20,21 @@ export function initCore(): void {
   inited = true
   trustSystemCertificates()
   db()
+  // UI language for messages produced here (errors, notifications, CLI output); follows settings changes
+  initLang(getSettings().language, systemLocale())
+  bus.onEvent((ev) => {
+    if (ev.type === 'settings-changed') initLang(getSettings().language, systemLocale())
+  })
   onNewMessages((accountId, ids, initial) => {
     processNewMessages(accountId, ids, initial)
   })
+}
+
+/** "pl_PL.UTF-8" / "pl-PL" style locale of this machine (env first: servers and CLI sessions set LANG). */
+export function systemLocale(): string {
+  const env = process.env.LC_ALL || process.env.LC_MESSAGES || process.env.LANG
+  if (env && !/^(C|POSIX)(\.|$)/.test(env)) return env.split('.')[0].replace('_', '-')
+  return Intl.DateTimeFormat().resolvedOptions().locale
 }
 
 let heartbeat: NodeJS.Timeout | null = null

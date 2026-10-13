@@ -13,6 +13,7 @@ import { IconButton, PromptHost, Spinner } from './components/ui'
 import { api } from './lib/api'
 import { useNarrow } from './lib/narrow'
 import { useStore } from './lib/store'
+import { t } from '../../shared/i18n'
 import AccountWizard from './views/AccountWizard'
 import AskView from './views/AskView'
 
@@ -184,8 +185,8 @@ export default function App() {
                 <DrawerButton />
                 <SearchBar />
                 <span className="flex-1 max-md:hidden" />
-                <IconButton title="Zapytaj AI o pocztę" onClick={() => setView('ask')}><Sparkles size={16} className="text-accent" /></IconButton>
-                {!narrow && <IconButton title="Polecenia (Ctrl+K)" onClick={() => useStore.setState({ palette: true })}><Command size={16} /></IconButton>}
+                <IconButton title={t('Ask AI about your mail')} onClick={() => setView('ask')}><Sparkles size={16} className="text-accent" /></IconButton>
+                {!narrow && <IconButton title={t('Commands (Ctrl+K)')} onClick={() => useStore.setState({ palette: true })}><Command size={16} /></IconButton>}
               </div>
             )}
             <div className="relative flex min-h-0 flex-1">
@@ -193,7 +194,7 @@ export default function App() {
               {(!narrow || phoneThread) && <ThreadView />}
               {narrow && !phoneThread && (
                 <button
-                  title="Nowa wiadomość"
+                  title={t('New message')}
                   onClick={() => useStore.getState().compose({ mode: 'new' })}
                   className="absolute bottom-5 right-5 z-20 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent text-accent-fg"
                   style={{ boxShadow: 'var(--shadow)' }}

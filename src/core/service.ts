@@ -3,13 +3,14 @@
 // Settings → AI Agents: read < triage (drafts, actions) < send (sending, calendar writes).
 import fs from 'node:fs'
 import path from 'node:path'
+import { t } from '../shared/i18n'
 import type {
   AccountInput, AgentAccess, AppSettings, Category, DraftInput, EventInput, Folder, MailboxRef, Rule, SmartFolder,
 } from '../shared/types'
 import * as accounts from './accounts'
 import * as A from './actions'
 import * as ai from './ai/features'
-import { CLAUDE_MODELS, hasClaudeKey, ollamaModels, setClaudeKey } from './ai/provider'
+import { claudeModels, hasClaudeKey, ollamaModels, setClaudeKey } from './ai/provider'
 import * as cal from './calendar'
 import { syncAllContacts } from './contacts-sync'
 import { all, get, inList, insert, now, run, update } from './db'
@@ -20,7 +21,7 @@ import { type OAuthProvider, startOAuth } from './oauth'
 import { pendingOps, processOps } from './ops'
 import { tmpDir } from './paths'
 import { secretStoreName } from './secrets'
-import { discover, PRESETS } from './providers'
+import { discover, presets } from './providers'
 import * as Q from './queries'
 import * as rules from './rules'
 import { searchMessages, searchThreads, threadsForMessages } from './search'
@@ -52,10 +53,13 @@ export function createService(actor: ServiceActor) {
     for (const id of list) {
       const acc = accounts.getAccount(id)
       if (LEVEL[acc.agent_access] < LEVEL[level]) {
-        const names: Record<string, string> = { read: 'odczyt', triage: 'porządkowanie', send: 'wysyłka' }
+        const names: Record<string, string> = { read: t('read'), triage: t('triage'), send: t('send') }
         throw new AccessError(
-          `Konto ${acc.email} ma poziom dostępu dla agentów „${names[acc.agent_access] || 'brak'}”, a ta operacja wymaga „${names[level]}”. ` +
-            'Zmień to w Octopus Mail → Ustawienia → Agenci AI.',
+          t('Account {email} has agent access level “{current}”, but this operation needs “{needed}”. Change it in Octopus Mail → Settings → AI agents & CLI.', {
+            email: acc.email,
+            current: names[acc.agent_access] || t('no access'),
+            needed: names[level],
+          }),
         )
       }
     }
@@ -73,34 +77,34 @@ export function createService(actor: ServiceActor) {
 
     // ---------- accounts ----------
     listAccounts: () => accounts.listAccounts().filter((a) => !agent || readable().has(a.id)),
-    presets: () => PRESETS,
+    presets: () => presets(),
     discover: (email: string) => discover(email),
     testConnection: (cfg: Parameters<typeof accounts.testConnection>[0]) => accounts.testConnection(cfg),
     async addAccount(input: AccountInput & { oauthProvider?: OAuthProvider }) {
-      if (agent) throw new AccessError('Konta można dodawać tylko w aplikacji.')
+      if (agent) throw new AccessError(t('Accounts can only be added in the app.'))
       const acc = await accounts.addAccount(input)
       sync.ensure(acc.id)
       if (acc.auth === 'oauth-google') void cal.ensureGoogleCalendarSources().catch(() => undefined)
       return acc
     },
     async oauthLogin(provider: OAuthProvider, email?: string) {
-      if (agent) throw new AccessError('Logowanie OAuth tylko w aplikacji.')
+      if (agent) throw new AccessError(t('OAuth sign-in only in the app.'))
       const { url, done } = await startOAuth(provider, email)
       return { url, done }
     },
     async updateAccount(id: number, patch: Record<string, unknown>) {
-      if (agent) throw new AccessError('Ustawienia kont zmienia się tylko w aplikacji.')
+      if (agent) throw new AccessError(t('Account settings can only be changed in the app.'))
       const acc = accounts.updateAccount(id, patch)
       if ('password' in patch || 'imap_host' in patch || 'enabled' in patch || 'username' in patch) await sync.restart(id)
       return acc
     },
     async removeAccount(id: number) {
-      if (agent) throw new AccessError('Konta usuwa się tylko w aplikacji.')
+      if (agent) throw new AccessError(t('Accounts can only be removed in the app.'))
       await sync.remove(id)
       accounts.removeAccount(id)
     },
     setAgentAccess(id: number, level: AgentAccess) {
-      if (agent) throw new AccessError('Poziom dostępu agentów zmienia się tylko w aplikacji.')
+      if (agent) throw new AccessError(t('Agent access can only be changed in the app.'))
       record('ui', 'agent-access', id, { level })
       return accounts.setAgentAccess(id, level)
     },
@@ -110,7 +114,7 @@ export function createService(actor: ServiceActor) {
       accounts.addIdentity(accountId, email, name)
     },
     removeIdentity: (id: number) => {
-      if (agent) throw new AccessError('Tylko w aplikacji.')
+      if (agent) throw new AccessError(t('Only in the app.'))
       accounts.removeIdentity(id)
     },
 
@@ -135,7 +139,7 @@ export function createService(actor: ServiceActor) {
     deleteFolder(folderId: number) {
       const f = get('SELECT * FROM folders WHERE id = ?', folderId)!
       need('triage', [f.account_id])
-      if (f.role) throw new Error('Nie można usunąć folderu systemowego')
+      if (f.role) throw new Error(t('A system folder cannot be deleted'))
       return sync.get(f.account_id).deleteFolder(f.path)
     },
     setFolderSync(folderId: number, mode: 'auto' | 'always' | 'never') {
@@ -172,7 +176,7 @@ export function createService(actor: ServiceActor) {
     },
     async fetchBody(messageId: number) {
       const m = get<{ account_id: number; body_state: number }>('SELECT account_id, body_state FROM messages WHERE id = ?', messageId)
-      if (!m) throw new Error('Wiadomość nie istnieje')
+      if (!m) throw new Error(t('Message does not exist'))
       need('read', [m.account_id])
       if (m.body_state !== 1) await sync.get(m.account_id).fetchBody(messageId)
       return Q.getMessage(messageId)
@@ -193,7 +197,7 @@ export function createService(actor: ServiceActor) {
     },
     async downloadAttachment(attId: number) {
       const a = get<{ message_id: number }>('SELECT message_id FROM attachments WHERE id = ?', attId)
-      if (!a) throw new Error('Załącznik nie istnieje')
+      if (!a) throw new Error(t('Attachment does not exist'))
       const acc = accountsOfMessages([a.message_id])
       need('read', acc)
       return sync.get(acc[0]).downloadAttachment(attId)
@@ -332,10 +336,10 @@ export function createService(actor: ServiceActor) {
     aiAsk: (q: string, onDelta?: (t: string) => void) => (need('read', 'any'), ai.askInbox(q, onDelta)),
     async aiStatus() {
       const s = getSettings().ai
-      return { provider: s.provider, ollamaModels: await ollamaModels(), claudeModels: CLAUDE_MODELS, hasClaudeKey: hasClaudeKey() }
+      return { provider: s.provider, ollamaModels: await ollamaModels(), claudeModels: claudeModels(), hasClaudeKey: hasClaudeKey() }
     },
     setClaudeKey: (key: string | null) => {
-      if (agent) throw new AccessError('Tylko w aplikacji.')
+      if (agent) throw new AccessError(t('Only in the app.'))
       setClaudeKey(key)
     },
 
@@ -343,11 +347,11 @@ export function createService(actor: ServiceActor) {
     listCalendars: () => cal.listCalendars(),
     listCalendarSources: () => cal.listCalendarSources(),
     addCalendarSource: (input: Parameters<typeof cal.addCalendarSource>[0]) => {
-      if (agent) throw new AccessError('Kalendarze dodaje się tylko w aplikacji.')
+      if (agent) throw new AccessError(t('Calendars can only be added in the app.'))
       return cal.addCalendarSource(input)
     },
     removeCalendarSource: (id: number) => {
-      if (agent) throw new AccessError('Tylko w aplikacji.')
+      if (agent) throw new AccessError(t('Only in the app.'))
       return cal.removeCalendarSource(id)
     },
     syncCalendars: (sourceId?: number) => cal.syncCalendars(sourceId),
@@ -365,13 +369,13 @@ export function createService(actor: ServiceActor) {
     // ---------- settings & misc ----------
     getSettings: () => getSettings(),
     updateSettings(patch: Partial<AppSettings>) {
-      if (agent) throw new AccessError('Ustawienia zmienia się tylko w aplikacji.')
+      if (agent) throw new AccessError(t('Settings can only be changed in the app.'))
       if (patch.gatekeeper === 'on' && getSettings().gatekeeper !== 'on') smart.acceptAllKnownSenders()
       return updateSettings(patch)
     },
     getKV: <T>(key: string, fallback: T) => getKV<T>(key, fallback),
     setKV(key: string, value: unknown) {
-      if (agent) throw new AccessError('Tylko w aplikacji.')
+      if (agent) throw new AccessError(t('Only in the app.'))
       setKV(key, value)
     },
     history: (limit?: number, who?: string) => listHistory(limit, who),

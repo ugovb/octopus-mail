@@ -1,4 +1,5 @@
 // Mail rules (Spark "Workflows" without the cloud): conditions on new incoming mail → actions.
+import { t } from '../shared/i18n'
 import type { Category, Rule, RuleAction, RuleCondition } from '../shared/types'
 import * as A from './actions'
 import { all, get, insert, inList, now, parseJson, type Row, run, update } from './db'
@@ -196,7 +197,7 @@ export function processNewMessages(accountId: number, ids: number[], initial: bo
 /** Run a rule over existing inbox mail ("apply to existing"). */
 export function applyRuleToExisting(ruleId: number, limit = 500): number {
   const rule = listRules().find((r) => r.id === ruleId)
-  if (!rule) throw new Error('Reguła nie istnieje')
+  if (!rule) throw new Error(t('Rule does not exist'))
   const rows = all(
     `SELECT m.* FROM messages m JOIN folders f ON f.id = m.folder_id
      WHERE f.role = 'inbox' AND m.hidden = 0 AND m.is_outgoing = 0 ORDER BY m.date DESC LIMIT ?`,

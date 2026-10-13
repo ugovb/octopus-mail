@@ -1,6 +1,7 @@
 // CalDAV access (tsdav): discovery, calendar listing, windowed/delta fetches, writes.
 // Google is reached over its CalDAV endpoint with the account's OAuth token (Bearer).
 import { DAVClient, type DAVCalendar, type DAVResponse } from 'tsdav'
+import { t } from '../../shared/i18n'
 import { getAccount } from '../accounts'
 import { log } from '../events'
 import { getAccessToken } from '../oauth'
@@ -27,24 +28,24 @@ export class DavHttpError extends Error {
   }
 }
 
-/** Human (Polish) message for a failed DAV/network operation. */
+/** Human message (in the UI language) for a failed DAV/network operation. */
 export function davErrorMessage(e: unknown): string {
   const err = e as Error & { cause?: { code?: string } }
   const msg = err?.message || String(e)
   const code = err?.cause?.code || ''
   if (e instanceof DavHttpError) return msg
   if (/\b401\b|Invalid credentials|Unauthorized/i.test(msg)) {
-    return 'Serwer kalendarza odrzucił dane logowania. Sprawdź login i hasło (dla iCloud potrzebne jest hasło dla aplikacji z appleid.apple.com).'
+    return t('The calendar server rejected the login details. Check the username and password (iCloud needs an app-specific password from appleid.apple.com).')
   }
-  if (/\b403\b|Forbidden/i.test(msg)) return 'Serwer kalendarza odmówił dostępu (HTTP 403).'
-  if (/cannot find (principalUrl|homeUrl)|discovery failed/i.test(msg)) return 'Nie znaleziono kalendarzy pod tym adresem — sprawdź adres serwera CalDAV.'
-  if (err?.name === 'TimeoutError' || /aborted|timed? ?out/i.test(msg)) return 'Serwer kalendarza nie odpowiada (przekroczono czas oczekiwania).'
+  if (/\b403\b|Forbidden/i.test(msg)) return t('The calendar server denied access (HTTP 403).')
+  if (/cannot find (principalUrl|homeUrl)|discovery failed/i.test(msg)) return t('No calendars found at this address — check the CalDAV server address.')
+  if (err?.name === 'TimeoutError' || /aborted|timed? ?out/i.test(msg)) return t('The calendar server is not responding (timed out).')
   if (/fetch failed|ENOTFOUND|ECONNREFUSED|EAI_AGAIN|ECONNRESET|ETIMEDOUT|network/i.test(`${msg} ${code}`)) {
-    return `Brak połączenia z serwerem kalendarza${code ? ` (${code})` : ''}.`
+    return t('No connection to the calendar server{code}.', { code: code ? ` (${code})` : '' })
   }
   // tsdav's own (English) diagnostics
   if (/Collection|query failed|sync failed|multistatus|\bDAV\b|cannot|missing|Invalid|expected|incomplete/.test(msg) && !/[ąćęłńóśźż]/i.test(msg)) {
-    return `Błąd serwera kalendarza: ${msg}`
+    return t('Calendar server error: {error}', { error: msg })
   }
   return msg
 }
@@ -53,8 +54,8 @@ function text(v: unknown): string | undefined {
   if (typeof v === 'string' || typeof v === 'number') return String(v)
   if (v && typeof v === 'object') {
     const o = v as { _cdata?: unknown; _text?: unknown }
-    const t = o._cdata ?? o._text
-    if (typeof t === 'string') return t
+    const s = o._cdata ?? o._text
+    if (typeof s === 'string') return s
   }
   return undefined
 }
@@ -102,7 +103,7 @@ export function dropClient(sourceId: number): void {
   conns.delete(sourceId)
 }
 
-/** Log in (discovery: principal → calendar home). Throws with a Polish message. */
+/** Log in (discovery: principal → calendar home). Throws with a message in the UI language. */
 export async function connectDav(opts: { serverUrl: string; username?: string; password?: string; accessToken?: string }): Promise<DAVClient> {
   const client = new DAVClient({
     serverUrl: opts.serverUrl,
@@ -123,7 +124,7 @@ export async function connectDav(opts: { serverUrl: string; username?: string; p
 function googleEmail(src: SourceRow): string {
   if (src.username) return src.username
   if (src.account_id) return getAccount(src.account_id).email
-  throw new Error('Źródło Google nie jest powiązane z kontem.')
+  throw new Error(t('The Google calendar source is not linked to an account.'))
 }
 
 export function googlePrimaryUrl(email: string): string {
@@ -135,17 +136,17 @@ export async function clientFor(src: SourceRow): Promise<Conn> {
   let key: string
   let opts: Parameters<typeof connectDav>[0]
   if (src.kind === 'google') {
-    if (!src.account_id) throw new Error('Źródło Google nie jest powiązane z kontem.')
+    if (!src.account_id) throw new Error(t('The Google calendar source is not linked to an account.'))
     const token = await getAccessToken(src.account_id)
     key = sha1(token)
     opts = { serverUrl: src.url || GOOGLE_CALDAV, accessToken: token }
   } else if (src.kind === 'caldav') {
     const password = getSecret(calSourceSecretKey(src.id))
-    if (!password) throw new Error('Brak zapisanego hasła do kalendarza — usuń to źródło i dodaj je ponownie.')
+    if (!password) throw new Error(t('No saved calendar password — remove this source and add it again.'))
     key = sha1(`${src.url}\n${src.username}\n${password}`)
     opts = { serverUrl: src.url || '', username: src.username || '', password }
   } else {
-    throw new Error('To źródło nie jest kalendarzem CalDAV.')
+    throw new Error(t('This source is not a CalDAV calendar.'))
   }
   const cached = conns.get(src.id)
   if (cached && cached.key === key && Date.now() - cached.at < 30 * 60_000) return cached
@@ -377,13 +378,13 @@ export async function putObject(
   } catch (e) {
     throw new Error(davErrorMessage(e))
   }
-  if (res.status === 412) throw new DavHttpError('Wydarzenie zostało w międzyczasie zmienione na serwerze — zsynchronizuj kalendarz i spróbuj ponownie.', 412)
+  if (res.status === 412) throw new DavHttpError(t('The event was changed on the server in the meantime — sync the calendar and try again.'), 412)
   if (!res.ok) {
     const body = await responseText(res)
-    if (res.status === 404) throw new DavHttpError('Wydarzenie nie istnieje już na serwerze.', 404)
+    if (res.status === 404) throw new DavHttpError(t('The event no longer exists on the server.'), 404)
     if (res.status === 401) throw new DavHttpError(davErrorMessage(new Error('401')), 401)
-    if (res.status === 403) throw new DavHttpError(`Serwer kalendarza nie pozwolił zapisać zmian (HTTP 403)${body ? `: ${body}` : ''}.`, 403)
-    throw new DavHttpError(`Serwer kalendarza odrzucił zapis (HTTP ${res.status})${body ? `: ${body}` : ''}.`, res.status)
+    if (res.status === 403) throw new DavHttpError(t('The calendar server did not allow saving the changes (HTTP 403){details}.', { details: body ? `: ${body}` : '' }), 403)
+    throw new DavHttpError(t('The calendar server rejected the save (HTTP {status}){details}.', { status: res.status, details: body ? `: ${body}` : '' }), res.status)
   }
   return { href: url, etag: res.headers.get('etag') }
 }
@@ -396,7 +397,7 @@ export async function deleteObject(conn: Conn, href: string, etag: string | null
     throw new Error(davErrorMessage(e))
   }
   if (res.ok || res.status === 404 || res.status === 410) return
-  if (res.status === 412) throw new DavHttpError('Wydarzenie zostało w międzyczasie zmienione na serwerze — zsynchronizuj kalendarz i spróbuj ponownie.', 412)
+  if (res.status === 412) throw new DavHttpError(t('The event was changed on the server in the meantime — sync the calendar and try again.'), 412)
   const body = await responseText(res)
-  throw new DavHttpError(`Serwer kalendarza nie usunął wydarzenia (HTTP ${res.status})${body ? `: ${body}` : ''}.`, res.status)
+  throw new DavHttpError(t('The calendar server did not delete the event (HTTP {status}){details}.', { status: res.status, details: body ? `: ${body}` : '' }), res.status)
 }

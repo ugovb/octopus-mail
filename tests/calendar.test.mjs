@@ -210,6 +210,7 @@ before(async () => {
       `export * as contacts from ${imp('src/core/contacts-sync.ts')}`,
       `export * as db from ${imp('src/core/db.ts')}`,
       `export { bus } from ${imp('src/core/events.ts')}`,
+      `export { setLang } from ${imp('src/shared/i18n.ts')}`,
     ].join('\n'),
   )
   const outfile = path.join(tmp, 'calendar.bundle.cjs')
@@ -226,6 +227,7 @@ before(async () => {
     banner: { js: `var require = require('node:module').createRequire(${JSON.stringify(path.join(root, 'package.json'))});` },
   })
   M = createRequire(import.meta.url)(outfile)
+  M.setLang('pl') // the assertions below check the Polish texts (invitation subjects, errors)
   M.cal.itipTransport.send = async (acc, raw, envelope) => {
     sent.push({ acc, raw: raw.toString('utf8'), envelope })
   }

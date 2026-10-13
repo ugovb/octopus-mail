@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { t } from '../shared/i18n'
 import type { Address, DraftAttachment, DraftInput, DraftView, Signature, Template } from '../shared/types'
 import { findAccount, getAccount, listAccounts, myAddresses } from './accounts'
 import { all, get, insert, now, parseJson, type Row, run, update } from './db'
@@ -41,7 +42,7 @@ export function rowToDraft(r: Row): DraftView {
 
 export function getDraft(id: number): DraftView {
   const r = get('SELECT * FROM drafts WHERE id = ?', id)
-  if (!r) throw new Error(`Wersja robocza ${id} nie istnieje`)
+  if (!r) throw new Error(t('Draft {id} does not exist', { id }))
   return rowToDraft(r)
 }
 
@@ -136,7 +137,7 @@ export function getTemplate(ref: number | string): Template {
   const r = typeof ref === 'number' || /^\d+$/.test(String(ref))
     ? get('SELECT * FROM templates WHERE id = ?', Number(ref))
     : get('SELECT * FROM templates WHERE name = ? COLLATE NOCASE', ref)
-  if (!r) throw new Error(`Szablon „${ref}” nie istnieje`)
+  if (!r) throw new Error(t('Template “{name}” does not exist', { name: String(ref) }))
   return rowToTemplate(r)
 }
 
@@ -229,12 +230,12 @@ function replySubject(subject: string, kind: 'reply' | 'forward'): string {
 }
 
 export function saveDraft(input: DraftInput): DraftView {
-  const t = now()
+  const ts = now()
   let existing: Row | undefined
   if (input.id) {
     existing = get('SELECT * FROM drafts WHERE id = ?', input.id)
-    if (!existing) throw new Error(`Wersja robocza ${input.id} nie istnieje`)
-    if (existing.status === 'sent') throw new Error('Ta wiadomość została już wysłana')
+    if (!existing) throw new Error(t('Draft {id} does not exist', { id: input.id }))
+    if (existing.status === 'sent') throw new Error(t('This message has already been sent'))
   }
 
   let accountId = input.account_id ?? existing?.account_id
@@ -247,7 +248,7 @@ export function saveDraft(input: DraftInput): DraftView {
   if (!existing && (input.reply_to_message_id || input.forward_of_message_id)) {
     const refMsgId = (input.reply_to_message_id || input.forward_of_message_id)!
     const m = get('SELECT * FROM messages WHERE id = ?', refMsgId)
-    if (!m) throw new Error(`Wiadomość ${refMsgId} nie istnieje`)
+    if (!m) throw new Error(t('Message {id} does not exist', { id: refMsgId }))
     accountId = accountId ?? pickAccountForReply(m)
     threadId = m.thread_id
     if (input.reply_to_message_id) {
@@ -279,7 +280,7 @@ export function saveDraft(input: DraftInput): DraftView {
   if (!accountId) {
     accountId = getSettings().defaultAccountId ?? getKV<number | null>('lastSendAccount', null) ?? listAccounts(false)[0]?.id
   }
-  if (!accountId) throw new Error('Najpierw dodaj konto e-mail')
+  if (!accountId) throw new Error(t('Add an email account first'))
   const acc = getAccount(accountId)
 
   // body
@@ -294,7 +295,7 @@ export function saveDraft(input: DraftInput): DraftView {
     const body = fillTemplate(tpl.html || '', ctx, true)
     const subj = fillTemplate(tpl.subject || '', ctx, false)
     const missing = [...new Set([...body.missing, ...subj.missing])].filter((n) => placeholderKind(n) === 'manual')
-    if (missing.length) throw new Error(`Uzupełnij pola szablonu: ${missing.join(', ')}`)
+    if (missing.length) throw new Error(t('Fill in the template fields: {fields}', { fields: missing.join(', ') }))
     html = html !== undefined ? `${html}${body.out}` : body.out
     if (!input.subject && !existing?.subject && !fields.subject) fields.subject = subj.out
     if (!input.to && !existing && tpl.to.length) fields.to_json = JSON.stringify(tpl.to)
@@ -327,7 +328,7 @@ export function saveDraft(input: DraftInput): DraftView {
     thread_id: threadId,
     in_reply_to: inReplyTo,
     refs,
-    updated_at: t,
+    updated_at: ts,
   }
   let id: number
   if (existing) {
@@ -335,7 +336,7 @@ export function saveDraft(input: DraftInput): DraftView {
     if (existing.status === 'failed' || existing.status === 'cancelled') row.status = 'draft'
     update('drafts', id, row)
   } else {
-    id = insert('drafts', { ...row, status: 'draft', source: input.source || 'ui', created_at: t })
+    id = insert('drafts', { ...row, status: 'draft', source: input.source || 'ui', created_at: ts })
   }
   setKV('lastSendAccount', acc.id)
   bus.emitEvent({ type: 'drafts-changed' })
@@ -381,9 +382,9 @@ export interface SendOptions {
 
 export function validateDraft(d: DraftView): string[] {
   const problems: string[] = []
-  if (!d.to.length && !d.cc.length && !d.bcc.length) problems.push('Brak odbiorców')
+  if (!d.to.length && !d.cc.length && !d.bcc.length) problems.push(t('No recipients'))
   for (const a of [...d.to, ...d.cc, ...d.bcc]) {
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(a.email)) problems.push(`Nieprawidłowy adres: ${a.email}`)
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(a.email)) problems.push(t('Invalid address: {email}', { email: a.email }))
   }
   return problems
 }
@@ -391,8 +392,8 @@ export function validateDraft(d: DraftView): string[] {
 /** Queue a draft for sending: after the undo window, or at a scheduled time (Send Later). */
 export function sendDraft(id: number, opts: SendOptions = {}): DraftView {
   const d = getDraft(id)
-  if (d.status === 'sent') throw new Error('Ta wiadomość została już wysłana')
-  if (d.status === 'sending') throw new Error('Wiadomość jest właśnie wysyłana')
+  if (d.status === 'sent') throw new Error(t('This message has already been sent'))
+  if (d.status === 'sending') throw new Error(t('The message is being sent right now'))
   const problems = validateDraft(d)
   if (problems.length) throw new Error(problems.join('; '))
   const undoMs = opts.immediate ? 0 : getSettings().undoSendSeconds * 1000
@@ -421,11 +422,11 @@ export function sendDraft(id: number, opts: SendOptions = {}): DraftView {
 /** Undo Send / cancel a scheduled (Send Later) message: it goes back to being a draft. */
 export function cancelSend(id: number, actor = 'ui'): DraftView {
   const d = getDraft(id)
-  if (d.status !== 'scheduled') throw new Error(d.status === 'sent' ? 'Za późno — wiadomość została już wysłana' : 'Ta wiadomość nie jest zaplanowana')
+  if (d.status !== 'scheduled') throw new Error(d.status === 'sent' ? t('Too late — the message has already been sent') : t('This message is not scheduled'))
   const opId = getKV<number | null>(`sendOp:${id}`, null)
   if (opId) cancelOps([opId])
   const r = run("UPDATE drafts SET status = 'draft', send_at = NULL, updated_at = ? WHERE id = ? AND status = 'scheduled'", now(), id)
-  if (!r.changes) throw new Error('Za późno — wysyłka już się rozpoczęła')
+  if (!r.changes) throw new Error(t('Too late — sending has already started'))
   record(actor, 'unschedule', id, { subject: d.subject })
   bus.emitEvent({ type: 'drafts-changed' })
   return getDraft(id)
@@ -442,7 +443,7 @@ export function scheduledDrafts(): DraftView[] {
 /** Convert a server-side draft (e.g. written in Gmail web) into a local editable draft. */
 export function adoptServerDraft(messageId: number): DraftView {
   const m = get('SELECT * FROM messages WHERE id = ?', messageId)
-  if (!m) throw new Error('Wiadomość nie istnieje')
+  if (!m) throw new Error(t('Message does not exist'))
   const body = get<{ html: string | null; text: string | null }>('SELECT html, text FROM bodies WHERE message_id = ?', messageId)
   const id = insert('drafts', {
     account_id: m.account_id,

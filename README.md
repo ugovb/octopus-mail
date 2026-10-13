@@ -23,7 +23,8 @@ snooze, send later, follow-up reminders, templates, AI writing help, calendar) t
 accounts, **without sending your mailbox to a vendor's cloud**. Your mail, passwords and AI data stay
 on your computer, or on a small server in your home if you want sync and a phone view.
 
-> **Heads-up:** the user interface is in **Polish** for now. An English translation is the next big item.
+The app speaks **English and Polish**: it follows your system language, and you can switch it in
+*Settings → Appearance & general*.
 
 ## Why
 
@@ -81,6 +82,8 @@ Spark's public feature set was only the to-do list.
 <img src="docs/screenshots/phone-thread.png" alt="Phone layout: conversation" width="260" />
 &nbsp;
 <img src="docs/screenshots/phone-menu.png" alt="Phone layout: menu" width="260" />
+<br /><br />
+<img src="docs/screenshots/calendar.png" alt="Calendar: week view" width="900" />
 </div>
 
 ## Install
@@ -111,8 +114,7 @@ docker compose -f deploy/docker-compose.yml up -d --build
 docker compose -f deploy/docker-compose.yml exec octopus octo server pair
 ```
 
-**Connecting devices:** in the app open *Ustawienia → Serwer domowy* (Settings → Home server) and enter
-the address and code. On a phone, open the server address in the browser and type the code.
+**Connecting devices:** in the app open *Settings → Home server* and enter the address and code. On a phone, open the server address in the browser and type the code.
 Keep the server on your home network and use a VPN such as Tailscale or WireGuard from outside;
 see [SECURITY.md](SECURITY.md).
 
@@ -137,12 +139,12 @@ the system secret store (Windows Credential Manager, GNOME Keyring / KWallet), n
 octo emails                                   # Smart Inbox
 octo search --filter "from:anna newer_than:7d"
 octo draft --reply-to 123 --body "Thanks, Friday works for me."
-octo send 45 --at "2026-10-20 9:00"           # send later; also "in 3 days" or Polish "jutro 9:00"
+octo send 45 --at "tomorrow 9:00"             # send later ("mon 14:30", "in 3 days", "2026-10-20 9:00")
 octo unschedule 45
 ```
 
 To connect Claude Code, copy the ready-made `claude mcp add …` command from the app
-(*Ustawienia → Agenci AI i CLI*). With a home server, the agent can talk to it over SSH:
+(*Settings → AI agents & CLI*). With a home server, the agent can talk to it over SSH:
 `claude mcp add octopus-mail --scope user -- ssh pi@raspberrypi.local octo mcp`.
 
 Each account starts with **read-only** agent access. Only you can raise it, in the app.
@@ -160,7 +162,7 @@ Tests and the demo profile (`npm run demo:seed && npm run demo`) never touch rea
 
 Team features (shared threads, comments), meeting notes, natural-language AI rules and auto-drafts,
 integrations (Todoist, Notion…), a home screen with swipe gestures, creating recurring events,
-a native phone app with push notifications, and an English UI. Read receipts / open tracking are left
+and a native phone app with push notifications. Read receipts / open tracking are left
 out on purpose.
 
 ## License and trademarks

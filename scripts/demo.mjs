@@ -18,7 +18,7 @@ if (cmd === 'seed') {
   fs.mkdirSync(profile, { recursive: true })
   const out = path.join(root, 'out', 'tests', 'demo-seed.cjs')
   await build({ entryPoints: [path.join(root, 'tests', 'demo-seed.ts')], outfile: out, bundle: true, platform: 'node', format: 'cjs', target: 'node22', packages: 'external', logLevel: 'warning' })
-  const r = spawnSync(process.execPath, [out], { stdio: 'inherit', env: { ...env, OCTO_QUIET: '1' } })
+  const r = spawnSync(process.execPath, [out], { stdio: 'inherit', env: { ...env, OCTO_QUIET: '1', OCTO_DEMO_LANG: a1 === 'en' ? 'en' : 'pl' } })
   process.exit(r.status ?? 1)
 }
 

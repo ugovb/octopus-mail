@@ -3,6 +3,7 @@ import {
   HardDrive, Lock, Mail, MapPin, PanelLeft, Pencil, Plus, RefreshCw, Repeat, Rss, Sparkles, TextAlignStart, Trash2, TriangleAlert, Users, Video,
 } from 'lucide-react'
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { dateLocale, getLang, t } from '../../../shared/i18n'
 import type { CalendarInfo, CoreEvent, EventInput } from '../../../shared/types'
 import { formatWhen, parseWhen, SOMEDAY } from '../../../shared/when'
 import DrawerButton from '../components/DrawerButton'
@@ -22,16 +23,17 @@ type AddKind = 'caldav' | 'ics' | 'local' | 'google'
 
 const DAY_MS = 86400_000
 const HOUR_PX = 48
-const MONTHS = ['Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec', 'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień']
-const MONTHS_GEN = ['stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca', 'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia']
-const MONTHS_SHORT = ['sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip', 'sie', 'wrz', 'paź', 'lis', 'gru']
-const DAYS_SHORT = ['nd', 'pon', 'wt', 'śr', 'czw', 'pt', 'sob']
-const DAYS_FULL = ['niedziela', 'poniedziałek', 'wtorek', 'środa', 'czwartek', 'piątek', 'sobota']
+// Polish names are kept exactly as before (Intl's Polish short forms differ: "pon." / "niedz."); other languages use Intl.
+const PL_MONTHS = ['Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec', 'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień']
+const PL_MONTHS_GEN = ['stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca', 'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia']
+const PL_MONTHS_SHORT = ['sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip', 'sie', 'wrz', 'paź', 'lis', 'gru']
+const PL_DAYS_SHORT = ['nd', 'pon', 'wt', 'śr', 'czw', 'pt', 'sob']
+const PL_DAYS_FULL = ['niedziela', 'poniedziałek', 'wtorek', 'środa', 'czwartek', 'piątek', 'sobota']
 const MODES: { value: Mode; label: string; title: string }[] = [
-  { value: 'day', label: 'Dzień', title: 'Dzień (D)' },
-  { value: 'week', label: 'Tydzień', title: 'Tydzień (W)' },
-  { value: 'month', label: 'Miesiąc', title: 'Miesiąc (M)' },
-  { value: 'agenda', label: 'Agenda', title: 'Agenda (A)' },
+  { value: 'day', label: t('Day'), title: t('Day (D)') },
+  { value: 'week', label: t('Week'), title: t('Week (W)') },
+  { value: 'month', label: t('Month'), title: t('Month (M)') },
+  { value: 'agenda', label: t('Agenda'), title: t('Agenda (A)') },
 ]
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -63,17 +65,39 @@ function atTime(day: number, hours: number, minutes = 0): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate(), hours, minutes).getTime()
 }
 const minutesOfDay = (t: number) => new Date(t).getHours() * 60 + new Date(t).getMinutes()
-const shortDate = (t: number) => `${new Date(t).getDate()} ${MONTHS_SHORT[new Date(t).getMonth()]}`
-function longDate(t: number): string {
-  const d = new Date(t)
-  const year = d.getFullYear() !== new Date().getFullYear() ? ` ${d.getFullYear()}` : ''
-  return `${DAYS_FULL[d.getDay()]}, ${d.getDate()} ${MONTHS_GEN[d.getMonth()]}${year}`
+const isPl = () => getLang() === 'pl'
+const fmt = (ts: number, o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(dateLocale(), o).format(ts)
+/** "pon" / "Mon" */
+const weekdayShort = (ts: number) => (isPl() ? PL_DAYS_SHORT[new Date(ts).getDay()] : fmt(ts, { weekday: 'short' }))
+/** "poniedziałek" / "Monday" */
+const weekdayLong = (ts: number) => (isPl() ? PL_DAYS_FULL[new Date(ts).getDay()] : fmt(ts, { weekday: 'long' }))
+/** "13 paź" / "13 Oct" */
+function shortDate(ts: number): string {
+  const d = new Date(ts)
+  return isPl() ? `${d.getDate()} ${PL_MONTHS_SHORT[d.getMonth()]}` : fmt(ts, { day: 'numeric', month: 'short' })
+}
+/** "13 października" / "13 October" */
+function dayMonth(ts: number): string {
+  const d = new Date(ts)
+  return isPl() ? `${d.getDate()} ${PL_MONTHS_GEN[d.getMonth()]}` : fmt(ts, { day: 'numeric', month: 'long' })
+}
+/** "Październik 2026" / "October 2026" */
+function monthYear(ts: number): string {
+  const d = new Date(ts)
+  return isPl() ? `${PL_MONTHS[d.getMonth()]} ${d.getFullYear()}` : fmt(ts, { month: 'long', year: 'numeric' })
+}
+function longDate(ts: number): string {
+  const d = new Date(ts)
+  const otherYear = d.getFullYear() !== new Date().getFullYear()
+  if (!isPl()) return fmt(ts, { weekday: 'long', day: 'numeric', month: 'long', ...(otherYear ? { year: 'numeric' } : {}) })
+  const year = otherYear ? ` ${d.getFullYear()}` : ''
+  return `${PL_DAYS_FULL[d.getDay()]}, ${d.getDate()} ${PL_MONTHS_GEN[d.getMonth()]}${year}`
 }
 function dayName(day: number): string {
   const today = startOfDay(Date.now())
-  if (day === today) return 'Dzisiaj'
-  if (day === addDays(today, 1)) return 'Jutro'
-  return cap(DAYS_FULL[new Date(day).getDay()])
+  if (day === today) return t('Today')
+  if (day === addDays(today, 1)) return t('Tomorrow')
+  return cap(weekdayLong(day))
 }
 const toDateInput = (t: number) => {
   const d = new Date(t)
@@ -95,17 +119,21 @@ function viewDays(mode: Mode, anchor: number, weekStartsOn: number): number[] {
 }
 
 function spanLabel(a: number, b: number): string {
+  if (!isPl()) return new Intl.DateTimeFormat(dateLocale(), { day: 'numeric', month: 'short', year: 'numeric' }).formatRange(a, b)
   const x = new Date(a)
   const y = new Date(b)
   if (x.getFullYear() !== y.getFullYear()) return `${shortDate(a)} ${x.getFullYear()} – ${shortDate(b)} ${y.getFullYear()}`
   if (x.getMonth() !== y.getMonth()) return `${shortDate(a)} – ${shortDate(b)} ${y.getFullYear()}`
-  return `${x.getDate()}–${y.getDate()} ${MONTHS_SHORT[y.getMonth()]} ${y.getFullYear()}`
+  return `${x.getDate()}–${y.getDate()} ${PL_MONTHS_SHORT[y.getMonth()]} ${y.getFullYear()}`
 }
 
 function viewTitle(mode: Mode, anchor: number, days: number[]): string {
   const d = new Date(anchor)
-  if (mode === 'month') return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`
-  if (mode === 'day') return cap(`${DAYS_FULL[d.getDay()]}, ${d.getDate()} ${MONTHS_GEN[d.getMonth()]} ${d.getFullYear()}`)
+  if (mode === 'month') return monthYear(anchor)
+  if (mode === 'day') {
+    if (!isPl()) return fmt(anchor, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    return cap(`${PL_DAYS_FULL[d.getDay()]}, ${d.getDate()} ${PL_MONTHS_GEN[d.getMonth()]} ${d.getFullYear()}`)
+  }
   return spanLabel(days[0], days[days.length - 1])
 }
 
@@ -121,21 +149,25 @@ const byStart = (a: Occ, b: Occ) => Number(isAllDayLike(b)) - Number(isAllDayLik
 
 function eventWhen(e: Occ): string {
   const last = lastDayOf(e.start, e.end)
-  if (e.all_day) return last > startOfDay(e.start) ? `${longDate(e.start)} – ${longDate(last)} · cały dzień` : `${longDate(e.start)} · cały dzień`
+  if (e.all_day) {
+    return last > startOfDay(e.start)
+      ? t('{from} – {to} · all day', { from: longDate(e.start), to: longDate(last) })
+      : t('{date} · all day', { date: longDate(e.start) })
+  }
   if (last === startOfDay(e.start)) return `${longDate(e.start)} · ${hhmm(new Date(e.start))}–${hhmm(new Date(e.end))}`
   return `${longDate(e.start)}, ${hhmm(new Date(e.start))} – ${longDate(e.end)}, ${hhmm(new Date(e.end))}`
 }
 
 /** Time label of an event within one particular day (agenda / month). */
 function timeOnDay(e: Occ, day: number): string {
-  if (e.all_day) return 'cały dzień'
+  if (e.all_day) return t('all day')
   const dayEnd = addDays(day, 1)
   const startsToday = e.start >= day
   const endsToday = e.end <= dayEnd
   if (startsToday && endsToday) return `${hhmm(new Date(e.start))}–${hhmm(new Date(e.end))}`
-  if (startsToday) return `od ${hhmm(new Date(e.start))}`
-  if (endsToday) return `do ${hhmm(new Date(e.end))}`
-  return 'cały dzień'
+  if (startsToday) return t('from {time}', { time: hhmm(new Date(e.start)) })
+  if (endsToday) return t('until {time}', { time: hhmm(new Date(e.end)) })
+  return t('all day')
 }
 
 /** Soft, theme-aware background for an event in its calendar colour. */
@@ -363,7 +395,7 @@ function EventBlock({ p, onOpen }: { p: Placed; onOpen: (e: Occ) => void }) {
     >
       {tall ? (
         <>
-          <div className="truncate font-semibold">{e.summary || '(bez tytułu)'}</div>
+          <div className="truncate font-semibold">{e.summary || t('(no title)')}</div>
           <div className="truncate text-muted">
             {time}
             {e.location ? ` · ${e.location}` : ''}
@@ -371,7 +403,7 @@ function EventBlock({ p, onOpen }: { p: Placed; onOpen: (e: Occ) => void }) {
         </>
       ) : (
         <div className="truncate">
-          <span className="font-semibold">{e.summary || '(bez tytułu)'}</span>
+          <span className="font-semibold">{e.summary || t('(no title)')}</span>
           <span className="text-muted"> · {hhmm(new Date(e.start))}</span>
         </div>
       )}
@@ -435,10 +467,10 @@ function TimeGrid({ days, events, now, onSlot, onOpen, onDay: openDay }: {
             <button
               key={d}
               onClick={() => openDay(d)}
-              title="Pokaż ten dzień"
+              title={t('Show this day')}
               className={cx('flex items-center justify-center gap-1.5 border-l border-line py-1.5 hover:bg-hover', today ? 'text-accent' : 'text-muted')}
             >
-              <span className="text-[11.5px] uppercase">{n === 1 ? DAYS_FULL[date.getDay()] : DAYS_SHORT[date.getDay()]}</span>
+              <span className="text-[11.5px] uppercase">{n === 1 ? weekdayLong(d) : weekdayShort(d)}</span>
               <span className={cx('flex h-7 min-w-7 items-center justify-center rounded-full px-1 text-[15px] font-semibold', today ? 'bg-accent text-accent-fg' : 'text-fg')}>
                 {date.getDate()}
               </span>
@@ -447,7 +479,7 @@ function TimeGrid({ days, events, now, onSlot, onOpen, onDay: openDay }: {
         })}
       </div>
       <div className="grid shrink-0 border-b border-line pr-[10px]" style={cols}>
-        <div className="pr-2 pt-1 text-right text-[10.5px] text-faint">cały dzień</div>
+        <div className="pr-2 pt-1 text-right text-[10.5px] text-faint">{t('all day')}</div>
         <div className="relative max-h-[104px] overflow-y-auto" style={{ gridColumn: `2 / span ${n}` }} onClick={clickAllDay}>
           <div className="relative" style={{ height: Math.max(1, lanes) * 22 + 4 }}>
             {days.map((d, i) => (
@@ -461,7 +493,7 @@ function TimeGrid({ days, events, now, onSlot, onOpen, onDay: openDay }: {
                 className={cx('absolute truncate rounded-md px-1.5 text-left text-[11.5px] font-medium leading-[20px] text-fg hover:brightness-95', isDeclined(x.e) && 'line-through opacity-55')}
                 style={{ left: `calc(${(x.start / n) * 100}% + 2px)`, width: `calc(${(x.span / n) * 100}% - 4px)`, top: 2 + x.lane * 22, height: 20, ...tone(x.e, 24) }}
               >
-                {x.e.summary || '(bez tytułu)'}
+                {x.e.summary || t('(no title)')}
               </button>
             ))}
           </div>
@@ -498,7 +530,7 @@ function MonthGrid({ days, anchor, events, now, onSlot, onOpen, onDay: openDay }
       <div className="grid shrink-0 grid-cols-7 border-b border-line">
         {days.slice(0, 7).map((d) => (
           <div key={d} className="border-l border-line py-1.5 text-center text-[11.5px] uppercase text-muted first:border-l-0">
-            {DAYS_SHORT[new Date(d).getDay()]}
+            {weekdayShort(d)}
           </div>
         ))}
       </div>
@@ -524,7 +556,7 @@ function MonthGrid({ days, anchor, events, now, onSlot, onOpen, onDay: openDay }
                   today ? 'bg-accent font-semibold text-accent-fg' : date.getMonth() !== month ? 'text-faint hover:bg-hover' : 'text-fg hover:bg-hover',
                 )}
               >
-                {date.getDate() === 1 ? `${date.getDate()} ${MONTHS_SHORT[date.getMonth()]}` : date.getDate()}
+                {date.getDate() === 1 ? shortDate(d) : date.getDate()}
               </button>
               {list.slice(0, extra > 0 ? 2 : 3).map((e) =>
                 isAllDayLike(e) ? (
@@ -534,7 +566,7 @@ function MonthGrid({ days, anchor, events, now, onSlot, onOpen, onDay: openDay }
                     className={cx('truncate rounded px-1.5 text-left text-[11.5px] font-medium leading-[18px] text-fg', isDeclined(e) && 'line-through opacity-55')}
                     style={tone(e, 24)}
                   >
-                    {e.summary || '(bez tytułu)'}
+                    {e.summary || t('(no title)')}
                   </button>
                 ) : (
                   <button
@@ -544,13 +576,13 @@ function MonthGrid({ days, anchor, events, now, onSlot, onOpen, onDay: openDay }
                   >
                     <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: colorOf(e) }} />
                     <span className="shrink-0 tabular-nums text-muted">{hhmm(new Date(Math.max(e.start, d)))}</span>
-                    <span className="truncate">{e.summary || '(bez tytułu)'}</span>
+                    <span className="truncate">{e.summary || t('(no title)')}</span>
                   </button>
                 ),
               )}
               {extra > 0 && (
                 <button onClick={(ev) => (ev.stopPropagation(), openDay(d))} className="self-start rounded px-1 text-[11.5px] font-medium text-muted hover:bg-hover hover:text-fg">
-                  +{extra + 1} więcej
+                  {t('+{n} more', { n: extra + 1 })}
                 </button>
               )}
             </div>
@@ -572,8 +604,8 @@ function AgendaList({ days, events, now, onOpen }: { days: number[]; events: Occ
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center text-muted">
         <CalendarDays size={36} className="text-faint" />
-        <div className="text-[14.5px] font-medium text-fg">Brak wydarzeń</div>
-        <div className="text-[12.5px]">W najbliższych 30 dniach nic nie zaplanowano.</div>
+        <div className="text-[14.5px] font-medium text-fg">{t('No events')}</div>
+        <div className="text-[12.5px]">{t('Nothing scheduled in the next 30 days.')}</div>
       </div>
     )
   }
@@ -585,9 +617,7 @@ function AgendaList({ days, events, now, onOpen }: { days: number[]; events: Occ
           <div key={d}>
             <div className="sticky top-0 z-10 flex items-baseline gap-2 border-b border-line bg-surface pb-1.5 pt-4">
               <span className={cx('text-[13.5px] font-semibold', d === today && 'text-accent')}>{dayName(d)}</span>
-              <span className="text-[12.5px] text-muted">
-                {new Date(d).getDate()} {MONTHS_GEN[new Date(d).getMonth()]}
-              </span>
+              <span className="text-[12.5px] text-muted">{dayMonth(d)}</span>
             </div>
             {list.map((e) => (
               <button
@@ -598,9 +628,9 @@ function AgendaList({ days, events, now, onOpen }: { days: number[]; events: Occ
                 <span className="w-[92px] shrink-0 pt-px text-[12.5px] tabular-nums text-muted">{timeOnDay(e, d)}</span>
                 <span className="mt-[5px] h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colorOf(e) }} />
                 <span className="min-w-0 flex-1">
-                  <span className={cx('block truncate text-[13.5px] font-medium', isDeclined(e) && 'line-through')}>{e.summary || '(bez tytułu)'}</span>
+                  <span className={cx('block truncate text-[13.5px] font-medium', isDeclined(e) && 'line-through')}>{e.summary || t('(no title)')}</span>
                   {(e.location || e.conference_url) && (
-                    <span className="block truncate text-[12px] text-muted">{e.location || 'Spotkanie online'}</span>
+                    <span className="block truncate text-[12px] text-muted">{e.location || t('Online meeting')}</span>
                   )}
                 </span>
                 <span className="shrink-0 pt-px text-[11.5px] text-faint">{e.calendar_name}</span>
@@ -625,15 +655,13 @@ function MiniMonth({ anchor, weekStartsOn, now, selFrom, selTo, onPick }: {
   return (
     <div className="px-1">
       <div className="flex items-center px-1 pb-1">
-        <span className="flex-1 text-[13px] font-semibold">
-          {MONTHS[m]} {new Date(month).getFullYear()}
-        </span>
-        <SmallIconButton title="Poprzedni miesiąc" onClick={() => setMonth(addMonths(month, -1))}><ChevronLeft size={14} /></SmallIconButton>
-        <SmallIconButton title="Następny miesiąc" onClick={() => setMonth(addMonths(month, 1))}><ChevronRight size={14} /></SmallIconButton>
+        <span className="flex-1 text-[13px] font-semibold">{monthYear(month)}</span>
+        <SmallIconButton title={t('Previous month')} onClick={() => setMonth(addMonths(month, -1))}><ChevronLeft size={14} /></SmallIconButton>
+        <SmallIconButton title={t('Next month')} onClick={() => setMonth(addMonths(month, 1))}><ChevronRight size={14} /></SmallIconButton>
       </div>
       <div className="grid grid-cols-7 text-center text-[10.5px] text-faint">
         {days.slice(0, 7).map((d) => (
-          <span key={d} className="py-0.5">{DAYS_SHORT[new Date(d).getDay()].slice(0, 2)}</span>
+          <span key={d} className="py-0.5">{weekdayShort(d).slice(0, 2)}</span>
         ))}
         {days.map((d) => {
           const today = now >= d && now < addDays(d, 1)
@@ -668,7 +696,7 @@ function CalendarList({ sources, calendars, hidden, onToggle, onAdd, onSourceMen
   onToggle: (id: number) => void; onAdd: () => void; onSourceMenu: (s: Source, e: React.MouseEvent) => void
 }) {
   return (
-    <SideSection title="Kalendarze" right={<SmallIconButton title="Dodaj kalendarz" onClick={onAdd}><Plus size={14} /></SmallIconButton>}>
+    <SideSection title={t('Calendars')} right={<SmallIconButton title={t('Add calendar')} onClick={onAdd}><Plus size={14} /></SmallIconButton>}>
       {sources.map((s) => {
         const cals = calendars.filter((c) => c.source_id === s.id)
         return (
@@ -677,11 +705,11 @@ function CalendarList({ sources, calendars, hidden, onToggle, onAdd, onSourceMen
               <span className="text-faint">{SOURCE_ICON[s.kind]}</span>
               <span className="flex-1 truncate" title={s.name}>{s.name}</span>
               {s.last_error && (
-                <span title={`Błąd synchronizacji: ${s.last_error}`} className="text-warning">
+                <span title={t('Sync error: {error}', { error: s.last_error })} className="text-warning">
                   <TriangleAlert size={12} />
                 </span>
               )}
-              <button className="hidden rounded p-0.5 hover:bg-hover hover:text-fg group-hover:block" title="Opcje" onClick={(e) => onSourceMenu(s, e)}>
+              <button className="hidden rounded p-0.5 hover:bg-hover hover:text-fg group-hover:block" title={t('Options')} onClick={(e) => onSourceMenu(s, e)}>
                 <Ellipsis size={13} />
               </button>
             </div>
@@ -695,7 +723,7 @@ function CalendarList({ sources, calendars, hidden, onToggle, onAdd, onSourceMen
                   aria-checked={visible}
                   onClick={() => onToggle(c.id)}
                   className="flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-[13px] hover:bg-hover"
-                  title={c.readonly ? `${c.name} (tylko do odczytu)` : c.name}
+                  title={c.readonly ? t('{name} (read-only)', { name: c.name }) : c.name}
                 >
                   <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[4px] border-2" style={{ borderColor: color, background: visible ? color : 'transparent' }}>
                     {visible && <Check size={10} strokeWidth={3.5} className="text-white" />}
@@ -705,12 +733,12 @@ function CalendarList({ sources, calendars, hidden, onToggle, onAdd, onSourceMen
                 </button>
               )
             })}
-            {!cals.length && <div className="px-2 py-1 text-[12px] text-faint">{s.last_sync ? 'Brak kalendarzy' : 'Synchronizacja…'}</div>}
+            {!cals.length && <div className="px-2 py-1 text-[12px] text-faint">{s.last_sync ? t('No calendars') : t('Syncing…')}</div>}
           </div>
         )
       })}
       <button onClick={onAdd} className="flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-[13px] text-muted hover:bg-hover hover:text-fg">
-        <Plus size={14} /> Dodaj kalendarz
+        <Plus size={14} /> {t('Add calendar')}
       </button>
     </SideSection>
   )
@@ -740,25 +768,25 @@ function FreeSlots({ onPick }: { onPick: (start: number, end: number) => void })
     return [...m.entries()]
   }, [slots])
   return (
-    <SideSection title="Znajdź wolny termin">
+    <SideSection title={t('Find a free slot')}>
       <div className="flex items-center gap-1.5 px-2">
         <Select
           value={duration}
           onChange={(v) => (setDuration(v), setSlots(null))}
           className="min-w-0 flex-1"
           options={[
-            { value: '30', label: '30 min' },
-            { value: '60', label: '1 godzina' },
-            { value: '90', label: '1,5 godziny' },
+            { value: '30', label: t('30 min') },
+            { value: '60', label: t('1 hour') },
+            { value: '90', label: t('1.5 hours') },
           ]}
         />
         <Button size="sm" onClick={() => void find()} disabled={busy}>
-          {busy ? <Spinner className="h-3.5 w-3.5" /> : <CalendarSearch size={13} />} Szukaj
+          {busy ? <Spinner className="h-3.5 w-3.5" /> : <CalendarSearch size={13} />} {t('Search')}
         </Button>
       </div>
       {slots && (
         <div className="mt-2 px-2">
-          {!byDay.length && <div className="py-1 text-[12px] text-muted">Brak wolnych terminów w godzinach pracy (9–17) w ciągu 7 dni.</div>}
+          {!byDay.length && <div className="py-1 text-[12px] text-muted">{t('No free slots during working hours (9:00–17:00) in the next 7 days.')}</div>}
           {byDay.map(([d, list]) => (
             <div key={d} className="mb-2">
               <div className="pb-1 text-[11.5px] font-medium text-muted">{dayName(d)} · {shortDate(d)}</div>
@@ -767,7 +795,7 @@ function FreeSlots({ onPick }: { onPick: (start: number, end: number) => void })
                   <button
                     key={s.start}
                     onClick={() => onPick(s.start, s.end)}
-                    title={`${hhmm(new Date(s.start))}–${hhmm(new Date(s.end))} — utwórz wydarzenie`}
+                    title={t('{time} — create event', { time: `${hhmm(new Date(s.start))}–${hhmm(new Date(s.end))}` })}
                     className="rounded-md border border-line bg-surface-2 px-1.5 py-0.5 text-[11.5px] tabular-nums hover:border-accent hover:text-accent"
                   >
                     {hhmm(new Date(s.start))}
@@ -785,10 +813,10 @@ function FreeSlots({ onPick }: { onPick: (start: number, end: number) => void })
 // ---------- event details ----------
 
 const STATUS_META: Record<string, { label: string; icon: ReactNode; cls: string }> = {
-  ACCEPTED: { label: 'Weźmie udział', icon: <CircleCheck size={14} />, cls: 'text-success' },
-  DECLINED: { label: 'Odrzucił(a)', icon: <CircleX size={14} />, cls: 'text-danger' },
-  TENTATIVE: { label: 'Może', icon: <CircleQuestionMark size={14} />, cls: 'text-warning' },
-  'NEEDS-ACTION': { label: 'Brak odpowiedzi', icon: <Circle size={14} />, cls: 'text-faint' },
+  ACCEPTED: { label: t('Going'), icon: <CircleCheck size={14} />, cls: 'text-success' },
+  DECLINED: { label: t('Declined'), icon: <CircleX size={14} />, cls: 'text-danger' },
+  TENTATIVE: { label: t('Maybe'), icon: <CircleQuestionMark size={14} />, cls: 'text-warning' },
+  'NEEDS-ACTION': { label: t('Awaiting response'), icon: <Circle size={14} />, cls: 'text-faint' },
 }
 
 function DetailRow({ icon, children }: { icon: ReactNode; children: ReactNode }) {
@@ -818,7 +846,7 @@ function EventDetails({ ev, onClose, onEdit, onDelete, onChanged }: {
     setBusy(true)
     try {
       await api.rsvpEvent(ev.id, r)
-      toast({ level: 'success', message: 'Odpowiedź wysłana do organizatora' })
+      toast({ level: 'success', message: t('Response sent to the organizer') })
       onChanged()
     } catch (e) {
       toast({ level: 'error', message: errorText(e) })
@@ -833,21 +861,21 @@ function EventDetails({ ev, onClose, onEdit, onDelete, onChanged }: {
       title={
         <span className="flex items-center gap-2.5">
           <span className="h-3 w-3 shrink-0 rounded-[4px]" style={{ background: colorOf(ev) }} />
-          <span className={cx(isDeclined(ev) && 'line-through')}>{ev.summary || '(bez tytułu)'}</span>
+          <span className={cx(isDeclined(ev) && 'line-through')}>{ev.summary || t('(no title)')}</span>
         </span>
       }
       footer={
         <>
           {recipients.length > 0 && (
             <Button variant="ghost" onClick={() => (onClose(), compose({ mode: 'new', prefill: { to: recipients, subject: ev.summary } }))}>
-              <Mail size={14} /> Napisz do uczestników
+              <Mail size={14} /> {t('Email attendees')}
             </Button>
           )}
           <span className="flex-1" />
           {!ev.readonly && (
             <>
-              <Button variant="outline" onClick={() => onDelete(ev)}><Trash2 size={14} /> Usuń</Button>
-              <Button variant="primary" onClick={() => onEdit(ev)}><Pencil size={14} /> Edytuj</Button>
+              <Button variant="outline" onClick={() => onDelete(ev)}><Trash2 size={14} /> {t('Delete')}</Button>
+              <Button variant="primary" onClick={() => onEdit(ev)}><Pencil size={14} /> {t('Edit')}</Button>
             </>
           )}
         </>
@@ -858,10 +886,10 @@ function EventDetails({ ev, onClose, onEdit, onDelete, onChanged }: {
           <div>{cap(eventWhen(ev))}</div>
           {ev.recurring && (
             <div className="mt-0.5 flex items-center gap-1 text-[12px] text-muted">
-              <Repeat size={12} /> Wydarzenie cykliczne
+              <Repeat size={12} /> {t('Recurring event')}
             </div>
           )}
-          {ev.status === 'CANCELLED' && <div className="mt-0.5 text-[12px] font-medium text-danger">Odwołane</div>}
+          {ev.status === 'CANCELLED' && <div className="mt-0.5 text-[12px] font-medium text-danger">{t('Cancelled')}</div>}
         </DetailRow>
         {ev.location && (
           <DetailRow icon={<MapPin size={15} />}>
@@ -871,28 +899,28 @@ function EventDetails({ ev, onClose, onEdit, onDelete, onChanged }: {
         {ev.conference_url && (
           <DetailRow icon={<Video size={15} />}>
             <Button size="sm" variant="primary" onClick={() => void window.octo.openExternal(ev.conference_url!)}>
-              Dołącz do spotkania
+              {t('Join meeting')}
             </Button>
             <div className="mt-1 truncate text-[11.5px] text-faint" title={ev.conference_url}>{ev.conference_url}</div>
           </DetailRow>
         )}
         <DetailRow icon={<CalendarDays size={15} />}>
           <span className="text-muted">{ev.calendar_name}</span>
-          {ev.readonly && <span className="ml-1.5 text-[11.5px] text-faint">(tylko do odczytu)</span>}
+          {ev.readonly && <span className="ml-1.5 text-[11.5px] text-faint">{t('(read-only)')}</span>}
         </DetailRow>
         {(ev.organizer || ev.attendees.length > 0) && (
           <DetailRow icon={<Users size={15} />}>
             {ev.organizer && (
               <div className="pb-1">
-                <span className="text-muted">Organizator: </span>
-                {ev.is_organizer ? 'Ty' : ev.organizer.name || ev.organizer.email}
+                <span className="text-muted">{t('Organizer:')} </span>
+                {ev.is_organizer ? t('You') : ev.organizer.name || ev.organizer.email}
                 {!ev.is_organizer && ev.organizer.name && <span className="text-[12px] text-faint"> &lt;{ev.organizer.email}&gt;</span>}
               </div>
             )}
             {ev.attendees.length > 0 && (
               <div className="flex flex-col gap-0.5">
                 <div className="text-[12px] text-muted">
-                  Uczestnicy ({ev.attendees.length}) · {ev.attendees.filter((a) => a.status === 'ACCEPTED').length} na tak
+                  {t('Attendees ({n}) · {yes} yes', { n: ev.attendees.length, yes: ev.attendees.filter((a) => a.status === 'ACCEPTED').length })}
                 </div>
                 {ev.attendees.map((a) => {
                   const meta = STATUS_META[(a.status || 'NEEDS-ACTION').toUpperCase()] || STATUS_META['NEEDS-ACTION']
@@ -901,7 +929,7 @@ function EventDetails({ ev, onClose, onEdit, onDelete, onChanged }: {
                       <span className={meta.cls}>{meta.icon}</span>
                       <span className="truncate">{a.name || a.email}</span>
                       {a.name && <span className="truncate text-[12px] text-faint">{a.email}</span>}
-                      {mine.has(a.email.toLowerCase()) && <span className="text-[11.5px] text-accent">(Ty)</span>}
+                      {mine.has(a.email.toLowerCase()) && <span className="text-[11.5px] text-accent">{t('(you)')}</span>}
                     </div>
                   )
                 })}
@@ -918,11 +946,11 @@ function EventDetails({ ev, onClose, onEdit, onDelete, onChanged }: {
         )}
         {canRsvp && (
           <div className="mt-2 flex items-center gap-2 border-t border-line pt-3">
-            <span className="mr-1 text-[12.5px] text-muted">Weźmiesz udział?</span>
+            <span className="mr-1 text-[12.5px] text-muted">{t('Going?')}</span>
             {busy && <Spinner className="text-muted" />}
             {(['ACCEPTED', 'TENTATIVE', 'DECLINED'] as Rsvp[]).map((r) => (
               <Button key={r} size="sm" variant={ev.my_status === r ? 'primary' : 'soft'} disabled={busy} onClick={() => void rsvp(r)}>
-                {r === 'ACCEPTED' ? 'Tak' : r === 'TENTATIVE' ? 'Może' : 'Nie'}
+                {r === 'ACCEPTED' ? t('Yes') : r === 'TENTATIVE' ? t('Maybe') : t('No')}
               </Button>
             ))}
           </div>
@@ -1046,17 +1074,17 @@ function EventEditor({ req, calendars, onClose, onSaved }: { req: EditorReq; cal
 
   const save = async () => {
     const r = draftRange(d)
-    if (!r) return toast({ level: 'error', message: 'Nieprawidłowa data lub godzina.' })
-    if (r.end < r.start) return toast({ level: 'error', message: 'Koniec wydarzenia nie może być przed jego początkiem.' })
+    if (!r) return toast({ level: 'error', message: t('Invalid date or time.') })
+    if (r.end < r.start) return toast({ level: 'error', message: t('The event can’t end before it starts.') })
     const attendees = splitEmails(d.attendees)
     const bad = attendees.find((a) => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(a))
-    if (bad) return toast({ level: 'error', message: `Nieprawidłowy adres uczestnika: ${bad}` })
+    if (bad) return toast({ level: 'error', message: t('Invalid attendee address: {email}', { email: bad }) })
     setBusy(true)
     try {
       if (!ev) {
         await api.createEvent({
           calendar_id: Number(d.calendarId) || undefined,
-          summary: d.summary.trim() || 'Nowe wydarzenie',
+          summary: d.summary.trim() || t('New event'),
           description: d.description.trim() || undefined,
           location: d.location.trim() || undefined,
           start: r.start,
@@ -1065,7 +1093,7 @@ function EventEditor({ req, calendars, onClose, onSaved }: { req: EditorReq; cal
           attendees,
           conference_url: d.conference.trim() || undefined,
         })
-        toast({ level: 'success', message: attendees.length ? 'Utworzono wydarzenie i wysłano zaproszenia' : 'Utworzono wydarzenie' })
+        toast({ level: 'success', message: attendees.length ? t('Event created and invitations sent') : t('Event created') })
       } else {
         // send only what changed, so untouched fields (HTML descriptions, attendee statuses) stay intact
         const patch: Partial<EventInput> = {}
@@ -1094,7 +1122,7 @@ function EventEditor({ req, calendars, onClose, onSaved }: { req: EditorReq; cal
         if (Object.keys(patch).length) {
           if (single && ev.occurrence_start != null) await api.updateEvent(ev.id, patch, { occurrence_start: ev.occurrence_start })
           else await api.updateEvent(ev.id, patch)
-          toast({ level: 'success', message: 'Zapisano zmiany' })
+          toast({ level: 'success', message: t('Changes saved') })
         }
       }
       onSaved()
@@ -1117,27 +1145,29 @@ function EventEditor({ req, calendars, onClose, onSaved }: { req: EditorReq; cal
       open
       onClose={onClose}
       width={580}
-      title={ev ? (single ? 'Edytuj to wystąpienie' : ev.recurring ? 'Edytuj całą serię' : 'Edytuj wydarzenie') : 'Nowe wydarzenie'}
+      title={ev ? (single ? t('Edit this occurrence') : ev.recurring ? t('Edit the whole series') : t('Edit event')) : t('New event')}
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>Anuluj</Button>
+          <Button variant="ghost" onClick={onClose}>{t('Cancel')}</Button>
           <Button variant="primary" disabled={busy || !writable.length} onClick={() => void save()}>
-            {busy && <Spinner className="h-3.5 w-3.5" />} Zapisz
+            {busy && <Spinner className="h-3.5 w-3.5" />} {t('Save')}
           </Button>
         </>
       }
     >
       <div className="px-5 py-3" onKeyDown={(e) => e.key === 'Enter' && (e.ctrlKey || e.metaKey) && (e.preventDefault(), void save())}>
-        <Field label="Tytuł">
-          <input autoFocus className={inputCls} value={d.summary} placeholder="Nowe wydarzenie" onChange={(e) => set('summary', e.target.value)} />
+        <Field label={t('Title')}>
+          <input autoFocus className={inputCls} value={d.summary} placeholder={t('New event')} onChange={(e) => set('summary', e.target.value)} />
         </Field>
         <Field
-          label="Szybko"
+          label={t('Quick add')}
           hint={
             quick.trim()
               ? parsedQuick
-                ? `Enter → ${parsedQuick.title ? `„${parsedQuick.title}”, ` : ''}${formatWhen(parsedQuick.start)}`
-                : 'Nie rozpoznaję daty — spróbuj np. „jutro 10:00”, „pt 14:30”, „20.10 9:15”.'
+                ? parsedQuick.title
+                  ? t('Enter → “{title}”, {when}', { title: parsedQuick.title, when: formatWhen(parsedQuick.start) })
+                  : `Enter → ${formatWhen(parsedQuick.start)}`
+                : t('I can’t read a date — try e.g. “tomorrow 10:00”, “fri 14:30”, “20.10 9:15”.')
               : undefined
           }
         >
@@ -1146,14 +1176,14 @@ function EventEditor({ req, calendars, onClose, onSaved }: { req: EditorReq; cal
             <input
               className={cx(inputCls, 'pl-9')}
               value={quick}
-              placeholder="np. jutro 10:00 albo „Lunch z Anią pt 13:00”"
+              placeholder={t('e.g. tomorrow 10:00 or “Lunch with Anna fri 13:00”')}
               onChange={(e) => setQuick(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !e.ctrlKey && (e.preventDefault(), applyQuick())}
             />
           </div>
         </Field>
         <div className="grid grid-cols-[1fr_auto] items-end gap-4">
-          <Field label="Kalendarz">
+          <Field label={t('Calendar')}>
             {writable.length ? (
               <Select
                 value={d.calendarId}
@@ -1161,29 +1191,29 @@ function EventEditor({ req, calendars, onClose, onSaved }: { req: EditorReq; cal
                 options={writable.map((c) => ({ value: String(c.id), label: `${c.name} · ${c.source_name}` }))}
               />
             ) : (
-              <div className="text-[12.5px] text-danger">Brak kalendarza z możliwością zapisu — dodaj kalendarz.</div>
+              <div className="text-[12.5px] text-danger">{t('No writable calendar — add a calendar.')}</div>
             )}
           </Field>
           <div className="pb-1.5">
-            <Toggle checked={d.allDay} onChange={(v) => set('allDay', v)} label="Cały dzień" />
+            <Toggle checked={d.allDay} onChange={(v) => set('allDay', v)} label={t('All day')} />
           </div>
         </div>
-        {single && <div className="pb-1 text-[12px] text-faint">Zmiany dotyczą tylko tego wystąpienia — kalendarza nie można tu zmienić.</div>}
-        {ev?.recurring && !single && <div className="pb-1 text-[12px] text-faint">Zmiany dotyczą całej serii; zmiana daty lub godziny przesunie wszystkie wystąpienia.</div>}
+        {single && <div className="pb-1 text-[12px] text-faint">{t('Changes apply only to this occurrence — the calendar can’t be changed here.')}</div>}
+        {ev?.recurring && !single && <div className="pb-1 text-[12px] text-faint">{t('Changes apply to the whole series; changing the date or time moves every occurrence.')}</div>}
         <div className="py-1.5">
-          {dateRow('Początek', d.startDate, d.startTime, (v) => setStart(v, d.startTime), (v) => setStart(d.startDate, v))}
-          {dateRow('Koniec', d.endDate, d.endTime, (v) => set('endDate', v), (v) => set('endTime', v))}
+          {dateRow(t('Starts'), d.startDate, d.startTime, (v) => setStart(v, d.startTime), (v) => setStart(d.startDate, v))}
+          {dateRow(t('Ends'), d.endDate, d.endTime, (v) => set('endDate', v), (v) => set('endTime', v))}
         </div>
-        <Field label="Lokalizacja">
-          <input className={inputCls} value={d.location} placeholder="Adres lub sala" onChange={(e) => set('location', e.target.value)} />
+        <Field label={t('Location')}>
+          <input className={inputCls} value={d.location} placeholder={t('Address or room')} onChange={(e) => set('location', e.target.value)} />
         </Field>
-        <Field label="Link do spotkania">
-          <input className={inputCls} value={d.conference} placeholder="https://meet.google.com/… lub Teams / Zoom" onChange={(e) => set('conference', e.target.value)} />
+        <Field label={t('Meeting link')}>
+          <input className={inputCls} value={d.conference} placeholder={t('https://meet.google.com/… or Teams / Zoom')} onChange={(e) => set('conference', e.target.value)} />
         </Field>
-        <Field label="Uczestnicy" hint="Adresy e-mail oddzielone przecinkami — uczestnicy dostaną zaproszenie e-mailem.">
-          <input className={inputCls} value={d.attendees} placeholder="anna@firma.pl, jan@firma.pl" onChange={(e) => set('attendees', e.target.value)} />
+        <Field label={t('Attendees')} hint={t('Email addresses separated by commas — attendees get an invitation by email.')}>
+          <input className={inputCls} value={d.attendees} placeholder={t('anna@example.com, john@example.com')} onChange={(e) => set('attendees', e.target.value)} />
         </Field>
-        <Field label="Opis">
+        <Field label={t('Description')}>
           <textarea
             className={cx(inputCls, 'h-24 resize-y py-2 leading-snug')}
             value={d.description}
@@ -1214,8 +1244,8 @@ function AddSourceModal({ kind, onClose, onAdded }: { kind: AddKind; onClose: ()
 
   const tabs: { value: AddKind; label: string }[] = [
     { value: 'caldav', label: 'CalDAV' },
-    { value: 'ics', label: 'Subskrypcja ICS' },
-    { value: 'local', label: 'Lokalny' },
+    { value: 'ics', label: t('ICS subscription') },
+    { value: 'local', label: t('Local') },
     ...(google.length ? [{ value: 'google' as AddKind, label: 'Google' }] : []),
   ]
 
@@ -1233,7 +1263,7 @@ function AddSourceModal({ kind, onClose, onAdded }: { kind: AddKind; onClose: ()
       } else {
         await api.addCalendarSource({ kind: 'local', name: name.trim() || undefined })
       }
-      toast({ level: 'success', message: tab === 'local' ? 'Dodano kalendarz lokalny' : 'Dodano kalendarz — trwa synchronizacja' })
+      toast({ level: 'success', message: tab === 'local' ? t('Local calendar added') : t('Calendar added — syncing') })
       onAdded()
     } catch (e) {
       setError(errorText(e))
@@ -1246,12 +1276,12 @@ function AddSourceModal({ kind, onClose, onAdded }: { kind: AddKind; onClose: ()
       open
       onClose={onClose}
       width={520}
-      title="Dodaj kalendarz"
+      title={t('Add calendar')}
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>Anuluj</Button>
+          <Button variant="ghost" onClick={onClose}>{t('Cancel')}</Button>
           <Button variant="primary" disabled={busy} onClick={() => void submit()}>
-            {busy && <Spinner className="h-3.5 w-3.5" />} Dodaj
+            {busy && <Spinner className="h-3.5 w-3.5" />} {t('Add')}
           </Button>
         </>
       }
@@ -1261,34 +1291,34 @@ function AddSourceModal({ kind, onClose, onAdded }: { kind: AddKind; onClose: ()
         <div className="mt-3">
           {tab === 'caldav' && (
             <>
-              <Field label="Dostawca">
+              <Field label={t('Provider')}>
                 <Select
                   value={provider}
                   onChange={setProvider}
                   options={[
                     { value: 'icloud', label: 'iCloud' },
                     { value: 'fastmail', label: 'Fastmail' },
-                    { value: 'nextcloud', label: 'Nextcloud / inny serwer CalDAV' },
+                    { value: 'nextcloud', label: t('Nextcloud / other CalDAV server') },
                   ]}
                 />
               </Field>
               <Field
-                label={provider === 'nextcloud' ? 'Adres serwera' : 'Adres serwera (opcjonalnie)'}
-                hint={provider === 'nextcloud' ? 'Np. https://chmura.example.pl/remote.php/dav' : 'Zostaw puste — adres zostanie ustawiony automatycznie.'}
+                label={provider === 'nextcloud' ? t('Server address') : t('Server address (optional)')}
+                hint={provider === 'nextcloud' ? t('E.g. https://cloud.example.com/remote.php/dav') : t('Leave empty — the address is set automatically.')}
               >
                 <input className={inputCls} value={url} placeholder={provider === 'nextcloud' ? 'https://…/remote.php/dav' : provider === 'icloud' ? 'https://caldav.icloud.com' : 'https://caldav.fastmail.com'} onChange={(e) => setUrl(e.target.value)} />
               </Field>
-              <Field label="Nazwa użytkownika">
-                <input className={inputCls} value={username} placeholder="zwykle adres e-mail" onChange={(e) => setUsername(e.target.value)} />
+              <Field label={t('Username')}>
+                <input className={inputCls} value={username} placeholder={t('usually your email address')} onChange={(e) => setUsername(e.target.value)} />
               </Field>
               <Field
-                label={provider === 'nextcloud' ? 'Hasło' : 'Hasło dla aplikacji'}
+                label={provider === 'nextcloud' ? t('Password') : t('App password')}
                 hint={
                   provider === 'icloud'
-                    ? 'Utwórz hasło dla aplikacji na appleid.apple.com → Logowanie i bezpieczeństwo.'
+                    ? t('Create an app-specific password at appleid.apple.com → Sign-In and Security.')
                     : provider === 'fastmail'
-                      ? 'Utwórz hasło aplikacji w Fastmail → Ustawienia → Prywatność i bezpieczeństwo.'
-                      : `Hasło będzie przechowywane ${useStore.getState().secretStore}, nie w bazie danych.`
+                      ? t('Create an app password in Fastmail → Settings → Privacy & Security.')
+                      : t('The password will be stored {where}, not in the database.', { where: useStore.getState().secretStore })
                 }
               >
                 <input type="password" className={inputCls} value={password} onChange={(e) => setPassword(e.target.value)} />
@@ -1296,21 +1326,21 @@ function AddSourceModal({ kind, onClose, onAdded }: { kind: AddKind; onClose: ()
             </>
           )}
           {tab === 'ics' && (
-            <Field label="Adres subskrypcji" hint="Link .ics lub webcal:// — np. święta, plan zajęć, kalendarz drużyny. Subskrypcja jest tylko do odczytu.">
-              <input autoFocus className={inputCls} value={url} placeholder="webcal://… lub https://….ics" onChange={(e) => setUrl(e.target.value)} />
+            <Field label={t('Subscription URL')} hint={t('An .ics or webcal:// link — e.g. holidays, a class timetable, a team calendar. Subscriptions are read-only.')}>
+              <input autoFocus className={inputCls} value={url} placeholder={t('webcal://… or https://….ics')} onChange={(e) => setUrl(e.target.value)} />
             </Field>
           )}
           {tab === 'local' && (
             <p className="py-1.5 text-[13px] text-muted">
-              Kalendarz lokalny jest zapisany tylko na tym komputerze — nie synchronizuje się z żadnym serwerem. Zaproszenia do uczestników nadal wyślemy e-mailem.
+              {t('A local calendar is stored only on this computer — it doesn’t sync with any server. Invitations to attendees are still sent by email.')}
             </p>
           )}
           {tab === 'google' && (
-            <Field label="Konto Google" hint="Kalendarze kont Google zalogowanych przez OAuth dodają się zwykle same.">
+            <Field label={t('Google account')} hint={t('Calendars of Google accounts signed in with OAuth are usually added automatically.')}>
               <Select value={accountId} onChange={setAccountId} options={google.map((a) => ({ value: String(a.id), label: a.email }))} />
             </Field>
           )}
-          <Field label="Nazwa (opcjonalnie)">
+          <Field label={t('Name (optional)')}>
             <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
           {error && <div className="mt-2 rounded-lg bg-danger/10 px-3 py-2 text-[12.5px] text-danger">{error}</div>}
@@ -1333,20 +1363,19 @@ function Onboarding({ onAdd }: { onAdd: (k: AddKind) => void }) {
     <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-bg p-8">
       <div className="max-w-[600px] text-center">
         <CalendarDays size={40} className="mx-auto mb-3 text-faint" />
-        <div className="text-[18px] font-semibold">Nie masz jeszcze kalendarzy</div>
+        <div className="text-[18px] font-semibold">{t('You don’t have any calendars yet')}</div>
         <p className="mx-auto mt-2 max-w-[480px] text-[13px] text-muted">
-          Konta Google dodane przez logowanie OAuth (Ustawienia → Konta) dostają kalendarz automatycznie — wydarzenia zsynchronizują się same. Możesz też
-          podłączyć inny kalendarz:
+          {t('Google accounts added with OAuth sign-in (Settings → Accounts) get their calendar automatically — events sync on their own. You can also connect another calendar:')}
         </p>
         <div className="mt-5 grid grid-cols-3 gap-3">
-          {card('caldav', <Cloud size={20} />, 'CalDAV', 'iCloud, Fastmail, Nextcloud — login i hasło dla aplikacji')}
-          {card('ics', <Rss size={20} />, 'Subskrypcja ICS', 'Link .ics lub webcal:// (tylko do odczytu)')}
-          {card('local', <HardDrive size={20} />, 'Lokalny', 'Kalendarz tylko na tym komputerze')}
+          {card('caldav', <Cloud size={20} />, 'CalDAV', t('iCloud, Fastmail, Nextcloud — username and app password'))}
+          {card('ics', <Rss size={20} />, t('ICS subscription'), t('An .ics or webcal:// link (read-only)'))}
+          {card('local', <HardDrive size={20} />, t('Local'), t('A calendar only on this computer'))}
         </div>
         {google.length > 0 && (
           <div className="mt-4">
             <Button variant="soft" onClick={() => onAdd('google')}>
-              <Globe size={14} /> Połącz kalendarz Google ({google.map((a) => a.email).join(', ')})
+              <Globe size={14} /> {t('Connect Google Calendar ({emails})', { emails: google.map((a) => a.email).join(', ') })}
             </Button>
           </div>
         )}
@@ -1479,7 +1508,7 @@ export default function CalendarView() {
   // ---- actions ----
   const openCreate = (start: number, end: number, allDay: boolean) => {
     if (!writable.length) {
-      toast({ level: 'error', message: 'Brak kalendarza, w którym można zapisać wydarzenie.', action: { label: 'Dodaj kalendarz', run: () => setAdding('local') } })
+      toast({ level: 'error', message: t('There’s no calendar you can save events to.'), action: { label: t('Add calendar'), run: () => setAdding('local') } })
       return
     }
     setEditor({ key: Date.now(), start, end, allDay })
@@ -1502,11 +1531,11 @@ export default function CalendarView() {
     }
     if (!recurringOcc(e)) return open('series')
     setAsk({
-      title: 'Edytować wydarzenie cykliczne?',
-      message: `„${e.summary || 'Wydarzenie'}” powtarza się. Co chcesz zmienić?`,
+      title: t('Edit recurring event?'),
+      message: t('“{title}” repeats. What do you want to change?', { title: e.summary || t('Event') }),
       actions: [
-        { label: 'Tylko to wystąpienie', variant: 'soft', run: () => open('single') },
-        { label: 'Całą serię', variant: 'primary', run: () => open('series') },
+        { label: t('Only this occurrence'), variant: 'soft', run: () => open('single') },
+        { label: t('The whole series'), variant: 'primary', run: () => open('series') },
       ],
     })
   }
@@ -1518,27 +1547,28 @@ export default function CalendarView() {
         if (single && e.occurrence_start != null) await api.deleteEvent(e.id, { occurrence_start: e.occurrence_start })
         else await api.deleteEvent(e.id)
         setSelected(null)
-        toast({ level: 'success', message: single ? 'Usunięto to wystąpienie' : 'Usunięto wydarzenie' })
+        toast({ level: 'success', message: single ? t('Occurrence deleted') : t('Event deleted') })
         void loadEvents()
       } catch (err) {
         toast({ level: 'error', message: errorText(err) })
       }
     }
-    const guests = e.is_organizer && e.attendees.length > 0 ? ' Uczestnicy dostaną e-mailem odwołanie.' : ''
+    const guests = e.is_organizer && e.attendees.length > 0 ? ` ${t('Attendees will get a cancellation by email.')}` : ''
+    const title = e.summary || t('Event')
     if (recurringOcc(e)) {
       setAsk({
-        title: 'Usunąć wydarzenie cykliczne?',
-        message: `„${e.summary || 'Wydarzenie'}” powtarza się. Co chcesz usunąć?${guests}`,
+        title: t('Delete recurring event?'),
+        message: t('“{title}” repeats. What do you want to delete?', { title }) + guests,
         actions: [
-          { label: 'Tylko to wystąpienie', variant: 'soft', run: () => void run(true) },
-          { label: 'Całą serię', variant: 'danger', run: () => void run(false) },
+          { label: t('Only this occurrence'), variant: 'soft', run: () => void run(true) },
+          { label: t('The whole series'), variant: 'danger', run: () => void run(false) },
         ],
       })
     } else {
       setAsk({
-        title: 'Usunąć wydarzenie?',
-        message: `„${e.summary || 'Wydarzenie'}” zostanie usunięte z kalendarza „${e.calendar_name}”.${guests}`,
-        actions: [{ label: 'Usuń', variant: 'danger', run: () => void run(false) }],
+        title: t('Delete event?'),
+        message: t('“{title}” will be deleted from the calendar “{calendar}”.', { title, calendar: e.calendar_name }) + guests,
+        actions: [{ label: t('Delete'), variant: 'danger', run: () => void run(false) }],
       })
     }
   }
@@ -1550,8 +1580,8 @@ export default function CalendarView() {
       const s = await api.listCalendarSources()
       setSources(s)
       const failed = s.filter((x) => x.last_error && (sourceId == null || x.id === sourceId))
-      if (failed.length) toast({ level: 'error', message: `Nie udało się zsynchronizować: ${failed.map((f) => `${f.name} — ${f.last_error}`).join('; ')}` })
-      else toast({ level: 'success', message: 'Kalendarze zsynchronizowane' })
+      if (failed.length) toast({ level: 'error', message: t('Couldn’t sync: {list}', { list: failed.map((f) => `${f.name} — ${f.last_error}`).join('; ') }) })
+      else toast({ level: 'success', message: t('Calendars synced') })
       void loadMeta()
       void loadEvents()
     } catch (e) {
@@ -1562,17 +1592,19 @@ export default function CalendarView() {
 
   const removeSource = (s: Source) =>
     setAsk({
-      title: 'Usunąć kalendarz?',
-      message: `„${s.name}” zniknie z Octopus Mail razem z zapisanymi lokalnie wydarzeniami.${s.kind === 'local' ? ' Wydarzenia kalendarza lokalnego zostaną utracone.' : ' Dane na serwerze pozostaną bez zmian.'}`,
+      title: t('Remove calendar?'),
+      message: `${t('“{name}” will be removed from Octopus Mail together with its locally saved events.', { name: s.name })} ${
+        s.kind === 'local' ? t('The local calendar’s events will be lost.') : t('Data on the server stays unchanged.')
+      }`,
       actions: [
         {
-          label: 'Usuń',
+          label: t('Remove'),
           variant: 'danger',
           run: () => {
             setAsk(null)
             void api
               .removeCalendarSource(s.id)
-              .then(() => (toast({ level: 'success', message: 'Usunięto kalendarz' }), void loadMeta(), void loadEvents()))
+              .then(() => (toast({ level: 'success', message: t('Calendar removed') }), void loadMeta(), void loadEvents()))
               .catch((e) => toast({ level: 'error', message: errorText(e) }))
           },
         },
@@ -1580,9 +1612,9 @@ export default function CalendarView() {
     })
 
   const sourceItems = (s: Source): MenuItem[] => [
-    ...(s.kind !== 'local' ? [{ label: 'Synchronizuj teraz', icon: <RefreshCw size={14} />, onClick: () => void syncAll(s.id) }] : []),
+    ...(s.kind !== 'local' ? [{ label: t('Sync now'), icon: <RefreshCw size={14} />, onClick: () => void syncAll(s.id) }] : []),
     {
-      label: 'Pokaż tylko ten',
+      label: t('Show only this one'),
       icon: <CalendarDays size={14} />,
       onClick: () => {
         const n = new Set(calendars.filter((c) => c.source_id !== s.id).map((c) => c.id))
@@ -1591,7 +1623,7 @@ export default function CalendarView() {
       },
     },
     { separator: true, label: '' },
-    { label: 'Usuń kalendarz…', icon: <Trash2 size={14} />, danger: true, onClick: () => removeSource(s) },
+    { label: t('Remove calendar…'), icon: <Trash2 size={14} />, danger: true, onClick: () => removeSource(s) },
   ]
 
   // ---- keyboard ----
@@ -1633,7 +1665,7 @@ export default function CalendarView() {
         width={440}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setAsk(null)}>Anuluj</Button>
+            <Button variant="ghost" onClick={() => setAsk(null)}>{t('Cancel')}</Button>
             {ask?.actions.map((a) => (
               <Button key={a.label} variant={a.variant || 'primary'} onClick={a.run}>{a.label}</Button>
             ))}
@@ -1652,7 +1684,7 @@ export default function CalendarView() {
   if (!sources.length) {
     return (
       <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-surface">
-        <div className="flex h-12 shrink-0 items-center gap-1.5 border-b border-line px-4 text-[15px] font-semibold max-md:px-2"><DrawerButton />Kalendarz</div>
+        <div className="flex h-12 shrink-0 items-center gap-1.5 border-b border-line px-4 text-[15px] font-semibold max-md:px-2"><DrawerButton />{t('Calendar')}</div>
         <Onboarding onAdd={setAdding} />
         {modals}
       </div>
@@ -1666,21 +1698,21 @@ export default function CalendarView() {
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-surface">
       <div className="flex h-12 shrink-0 items-center gap-1.5 border-b border-line px-3 max-md:h-auto max-md:flex-wrap max-md:px-2 max-md:py-1.5">
         <DrawerButton />
-        {!narrow && <IconButton title={side ? 'Ukryj panel' : 'Pokaż panel'} active={side} onClick={toggleSide}><PanelLeft size={16} /></IconButton>}
-        <Button size="sm" variant="outline" onClick={() => setAnchor(startOfDay(Date.now()))} title="Dzisiaj (T)">Dzisiaj</Button>
-        <IconButton title="Wstecz (←)" onClick={() => step(-1)}><ChevronLeft size={17} /></IconButton>
-        <IconButton title="Dalej (→)" onClick={() => step(1)}><ChevronRight size={17} /></IconButton>
+        {!narrow && <IconButton title={side ? t('Hide sidebar') : t('Show sidebar')} active={side} onClick={toggleSide}><PanelLeft size={16} /></IconButton>}
+        <Button size="sm" variant="outline" onClick={() => setAnchor(startOfDay(Date.now()))} title={t('Today (T)')}>{t('Today')}</Button>
+        <IconButton title={t('Previous (←)')} onClick={() => step(-1)}><ChevronLeft size={17} /></IconButton>
+        <IconButton title={t('Next (→)')} onClick={() => step(1)}><ChevronRight size={17} /></IconButton>
         <div className="ml-1 min-w-0 truncate text-[15px] font-semibold">{viewTitle(mode, anchor, days)}</div>
         {loading && <Spinner className="ml-1 text-muted" />}
         <span className="flex-1" />
         <div className="max-md:order-last max-md:flex max-md:basis-full max-md:justify-center">
           <Seg value={mode} onChange={setMode} options={narrow ? MODES.filter((m) => m.value !== 'week') : MODES} />
         </div>
-        <IconButton title="Synchronizuj kalendarze" disabled={syncing} onClick={() => void syncAll()}>
+        <IconButton title={t('Sync calendars')} disabled={syncing} onClick={() => void syncAll()}>
           <RefreshCw size={15} className={cx(syncing && 'animate-spin')} />
         </IconButton>
-        <Button variant="primary" size="sm" onClick={newEvent} title="Nowe wydarzenie (N)">
-          <Plus size={14} /> {!narrow && 'Nowe wydarzenie'}
+        <Button variant="primary" size="sm" onClick={newEvent} title={t('New event (N)')}>
+          <Plus size={14} /> {!narrow && t('New event')}
         </Button>
       </div>
       <div className="flex min-h-0 flex-1">

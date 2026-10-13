@@ -11,7 +11,7 @@
 [![Licencja MIT](https://img.shields.io/badge/licencja-MIT-f4c430?style=flat-square)](LICENSE)
 [![Windows · Linux](https://img.shields.io/badge/system-Windows%20%C2%B7%20Linux-5b4cf0?style=flat-square)](#instalacja)
 
-<img src="docs/screenshots/desktop.png" alt="Octopus Mail: Smart Inbox i rozmowa" width="1100" />
+<img src="docs/screenshots/pl/desktop.png" alt="Octopus Mail: Smart Inbox i rozmowa" width="1100" />
 
 </div>
 
@@ -52,6 +52,7 @@ i nazwa są własne; publiczna lista funkcji Sparka posłużyła tylko jako list
 - Bezpieczny podgląd HTML: blokada zdalnych obrazów i **pikseli śledzących**, zwijane cytaty.
 - **Reguły** z testem na istniejącej poczcie, paleta poleceń **Ctrl+K**, skróty klawiszowe, tryb
   jasny/ciemny, ikona w zasobniku z licznikiem.
+- Interfejs **po polsku i po angielsku** — według języka systemu albo do wyboru w Ustawieniach.
 
 **AI** (lokalnie przez [Ollamę](https://ollama.com) albo Claude z Twoim kluczem)
 - Podsumowanie wątku, odpowiedź w Twoim stylu, poprawianie i zmiana tonu, tłumaczenie, szybkie
@@ -75,11 +76,11 @@ i nazwa są własne; publiczna lista funkcji Sparka posłużyła tylko jako list
   ma stałe ID wersji roboczych, **anulowanie zaplanowanej wysyłki** (`octo unschedule`) i dziennik działań.
 
 <div align="center">
-<img src="docs/screenshots/phone-inbox.png" alt="Telefon: skrzynka" width="260" />
+<img src="docs/screenshots/pl/phone-inbox.png" alt="Telefon: skrzynka" width="260" />
 &nbsp;
-<img src="docs/screenshots/phone-thread.png" alt="Telefon: rozmowa" width="260" />
+<img src="docs/screenshots/pl/phone-thread.png" alt="Telefon: rozmowa" width="260" />
 &nbsp;
-<img src="docs/screenshots/phone-menu.png" alt="Telefon: menu" width="260" />
+<img src="docs/screenshots/pl/phone-menu.png" alt="Telefon: menu" width="260" />
 </div>
 
 ## Instalacja
@@ -174,7 +175,6 @@ Testy i profil demonstracyjny (`npm run demo:seed && npm run demo`) nigdy nie do
 | Ekran główny i gesty przesuwania | etap 2 |
 | Tworzenie wydarzeń cyklicznych (edycja istniejących działa) | etap 2 |
 | Natywna aplikacja na telefon z powiadomieniami push | jest interfejs WWW z serwera domowego |
-| Angielska wersja interfejsu | następna w kolejce |
 | Potwierdzenia przeczytania (śledzenie otwarć) | świadomie pominięte (prywatność) |
 
 ## Licencja i znaki towarowe

@@ -1,4 +1,5 @@
 // Free-slot finder over the user's calendars ("find a time").
+import { t } from '../../shared/i18n'
 import { addLocalDays, startOfLocalDay } from './ical'
 import { listEvents } from './store'
 
@@ -41,11 +42,11 @@ function merge(intervals: [number, number][]): [number, number][] {
  */
 export function findAvailability(opts: AvailabilityOptions): { start: number; end: number }[] {
   const dur = Math.round(Number(opts.durationMin) * 60_000)
-  if (!(dur > 0)) throw new Error('Podaj długość spotkania w minutach.')
+  if (!(dur > 0)) throw new Error(t('Enter the meeting length in minutes.'))
   const step = Math.max(5, Math.round(opts.stepMin ?? 30)) * 60_000
   const ws = opts.workdayStart ?? 9
   const we = opts.workdayEnd ?? 17
-  if (!(we > ws) || ws < 0 || we > 24) throw new Error('Godziny pracy są nieprawidłowe (początek musi być przed końcem, w zakresie 0–24).')
+  if (!(we > ws) || ws < 0 || we > 24) throw new Error(t('Working hours are not valid (the start must be before the end, within 0–24).'))
   const limit = Math.max(1, opts.limit ?? 500)
   const from = opts.allowPast ? opts.from : Math.max(opts.from, Date.now())
   const to = opts.to

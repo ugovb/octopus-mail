@@ -1,5 +1,6 @@
 // Local replacement for Spark's cloud timers: snooze wake-ups, follow-up reminders,
 // scheduled sends and the operation queue. Runs inside the desktop app (tray) or `octo daemon`.
+import { t } from '../shared/i18n'
 import { all, get, now, run } from './db'
 import { bus, log } from './events'
 import { record } from './history'
@@ -70,22 +71,22 @@ function fireReminders(): void {
     'SELECT id, subject, reminder_kind, reminder_ref FROM threads WHERE reminder_at IS NOT NULL AND reminder_at <= ?',
     now(),
   )
-  for (const t of due) {
-    if (t.reminder_kind === 'no-reply') {
+  for (const th of due) {
+    if (th.reminder_kind === 'no-reply') {
       const replied = get(
         'SELECT 1 FROM messages WHERE thread_id = ? AND is_outgoing = 0 AND date > ? LIMIT 1',
-        t.id,
-        t.reminder_ref || 0,
+        th.id,
+        th.reminder_ref || 0,
       )
       if (replied) {
-        run('UPDATE threads SET reminder_at = NULL, reminder_kind = NULL WHERE id = ?', t.id)
-        record('scheduler', 'reminder-skipped', t.id, 'odpowiedź już przyszła')
+        run('UPDATE threads SET reminder_at = NULL, reminder_kind = NULL WHERE id = ?', th.id)
+        record('scheduler', 'reminder-skipped', th.id, t('a reply has already arrived'))
         continue
       }
     }
-    run('UPDATE threads SET reminder_at = NULL, reminder_kind = NULL, resurfaced_at = ?, done_at = NULL WHERE id = ?', now(), t.id)
-    record('scheduler', 'reminder-fired', t.id)
-    bus.emitEvent({ type: 'reminder', threadId: t.id, subject: t.subject || '' })
+    run('UPDATE threads SET reminder_at = NULL, reminder_kind = NULL, resurfaced_at = ?, done_at = NULL WHERE id = ?', now(), th.id)
+    record('scheduler', 'reminder-fired', th.id)
+    bus.emitEvent({ type: 'reminder', threadId: th.id, subject: th.subject || '' })
   }
   if (due.length) bus.emitEvent({ type: 'mailbox-changed' })
 }

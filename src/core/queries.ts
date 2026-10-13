@@ -1,3 +1,4 @@
+import { t } from '../shared/i18n'
 import type {
   Address, AttachmentInfo, Category, FolderRole, MailboxRef, MessageView, ThreadSummary, ThreadView,
 } from '../shared/types'
@@ -143,6 +144,7 @@ export function summarize(threadRows: Row[]): ThreadSummary[] {
   )
 
   const out: ThreadSummary[] = []
+  const noSubject = t('(no subject)')
   for (const t of threadRows) {
     const list = byThread.get(t.id) || []
     if (!list.length) continue
@@ -171,7 +173,7 @@ export function summarize(threadRows: Row[]): ThreadSummary[] {
       account_id: t.account_id,
       account_email: acc?.email || '',
       account_color: acc?.color || null,
-      subject: latest.subject || '(bez tematu)',
+      subject: latest.subject || noSubject,
       snippet: latest.snippet || '',
       participants,
       from: latest.is_outgoing && latestIncoming

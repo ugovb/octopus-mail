@@ -1,5 +1,6 @@
 // Browser version of the Electron preload bridge: when the UI is served by the home server
 // (`octo serve`) there is no preload, so `window.octo` talks to the server's HTTP API instead.
+import { t } from '../../../shared/i18n'
 import type { CoreEvent, DraftAttachment } from '../../../shared/types'
 import { decodeWire, encodeWire } from '../../../shared/wire'
 
@@ -15,7 +16,7 @@ async function call(method: string, ...args: unknown[]): Promise<unknown> {
   const r = await fetch('/api/call', { method: 'POST', headers: H, body: encodeWire({ method, args }) })
   if (r.status === 401) {
     location.reload()
-    throw new Error('Sesja wygasła')
+    throw new Error(t('Session expired'))
   }
   const j = decodeWire<{ result?: unknown; error?: string }>(await r.text())
   if (j.error) throw new Error(j.error)
@@ -112,7 +113,7 @@ export function installWebBridge(): void {
       }
     },
     oauthAddAccount: async () => {
-      throw new Error('Logowanie przez Google/Microsoft jest dostępne w aplikacji na komputerze. W przeglądarce użyj hasła do aplikacji.')
+      throw new Error(t('Signing in with Google/Microsoft is available in the desktop app. In the browser, use an app password.'))
     },
     pickFiles: pickFilesInBrowser,
     openAttachment: async (id: number) => {
@@ -131,7 +132,7 @@ export function installWebBridge(): void {
       if (/^(https?|mailto):/i.test(url)) window.open(url, '_blank', 'noopener')
     },
     showItem: async () => undefined,
-    dataDir: async () => '(serwer domowy)',
+    dataDir: async () => t('(home server)'),
     cliPath: async () => ({ script: '', node: '', packaged: false }),
     setBadge: async (_dataUrl: string | null, count: number) => {
       document.title = count ? `(${count}) Octopus Mail` : 'Octopus Mail'
@@ -157,10 +158,10 @@ export function installWebBridge(): void {
       }
     },
     serverProbe: async () => {
-      throw new Error('Niedostępne w przeglądarce')
+      throw new Error(t('Not available in the browser'))
     },
     serverConnect: async () => {
-      throw new Error('Niedostępne w przeglądarce')
+      throw new Error(t('Not available in the browser'))
     },
     // "Odłącz" in a browser = log out this browser
     async serverDisconnect() {

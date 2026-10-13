@@ -1,8 +1,8 @@
 {
   "name": "Octopus Mail",
   "short_name": "Octopus",
-  "description": "Poczta z serwera domowego Octopus Mail",
-  "lang": "pl",
+  "description": "Your mail from the Octopus Mail home server",
+  "lang": "en",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

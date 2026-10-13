@@ -18,7 +18,8 @@ temporary folder and `OCTO_SECRETS=memory|file`. Please keep it that way in new 
 
 ## Guidelines
 
-- The UI is in Polish for now. Keep new texts in Polish; an English translation is planned.
+- UI texts are written in English and wrapped in `t()` / `tp()` from `src/shared/i18n.ts`; add the Polish
+  translation to the matching file in `src/shared/locales/pl/`. `npm run i18n:check` lists anything missing.
 - Colours come only from the theme tokens in `src/renderer/src/index.css` (light and dark).
 - Engine changes need a test in `tests/` (GreenMail covers IMAP/SMTP).
 - Octopus Mail is an independent project. Do not contribute code, images or text taken from

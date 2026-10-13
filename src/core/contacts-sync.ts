@@ -1,5 +1,6 @@
 // Google Contacts → local contact book (People API, read-only). Names, phones and companies
 // from the user's address book fill the contacts table; those senders count as "accepted".
+import { t } from '../shared/i18n'
 import { getAccount, listAccounts } from './accounts'
 import { now, run, tx } from './db'
 import { bus, log } from './events'
@@ -47,13 +48,15 @@ async function fetchConnections(token: string): Promise<Person[]> {
     try {
       res = await fetch(u, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }, signal: AbortSignal.timeout(30_000) })
     } catch (e) {
-      throw new Error(`Brak połączenia z Google Contacts: ${(e as Error).message}`)
+      throw new Error(t('No connection to Google Contacts: {error}', { error: (e as Error).message }))
     }
-    if (res.status === 401) throw new Error('Google odrzucił token — zaloguj konto ponownie (Ustawienia → Konta).')
+    if (res.status === 401) throw new Error(t('Google rejected the token — sign in to the account again (Settings → Accounts).'))
     if (res.status === 403) {
       const j = (await res.json().catch(() => null)) as { error?: { message?: string } } | null
       throw new Error(
-        `Google Contacts: brak dostępu (HTTP 403)${j?.error?.message ? ` — ${j.error.message}` : ''}. Sprawdź, czy People API jest włączone w projekcie Google Cloud i czy konto ma zgodę na kontakty.`,
+        t('Google Contacts: access denied (HTTP 403){details}. Check that the People API is enabled in the Google Cloud project and that the account allows access to contacts.', {
+          details: j?.error?.message ? ` — ${j.error.message}` : '',
+        }),
       )
     }
     if (!res.ok) throw new Error(`Google Contacts: HTTP ${res.status}`)
@@ -68,7 +71,7 @@ async function fetchConnections(token: string): Promise<Person[]> {
 /** Import the Google address book of one OAuth account. Returns the number of addresses stored. */
 export async function syncGoogleContacts(accountId: number): Promise<number> {
   const acc = getAccount(accountId)
-  if (acc.auth !== 'oauth-google') throw new Error('Synchronizacja kontaktów działa tylko dla kont Google zalogowanych przez OAuth.')
+  if (acc.auth !== 'oauth-google') throw new Error(t('Contact sync works only for Google accounts signed in with OAuth.'))
   const people = await fetchConnections(await getAccessToken(accountId))
   let n = 0
   tx(() => {

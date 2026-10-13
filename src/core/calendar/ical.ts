@@ -2,6 +2,7 @@
 // message builders. Pure functions on ICS text — no database or network access here.
 import crypto from 'node:crypto'
 import ICAL from 'ical.js'
+import { t } from '../../shared/i18n'
 import type { Address } from '../../shared/types'
 import { isValidTz, localWallClock, resolveTzid, vtimezoneFor, type WallClock, wallClockIn, zonedToEpoch } from './tz'
 
@@ -165,13 +166,13 @@ export function parseIcs(text: string): IcalComponent {
   try {
     jcal = ICAL.parse(clean)
   } catch (e) {
-    throw new Error(`Nieprawidłowy plik kalendarza (ICS): ${(e as Error).message}`)
+    throw new Error(t('Could not read the calendar file (ICS): {error}', { error: (e as Error).message }))
   }
-  if (!Array.isArray(jcal) || !jcal.length) throw new Error('Pusty plik kalendarza (ICS)')
+  if (!Array.isArray(jcal) || !jcal.length) throw new Error(t('Empty calendar file (ICS)'))
   const roots = (typeof jcal[0] === 'string' ? [jcal] : jcal) as unknown[][]
   const comps = roots.map((r) => new ICAL.Component(r as unknown[]))
   const first = comps.find((c) => c.name === 'vcalendar')
-  if (!first) throw new Error('W pliku nie ma kalendarza (brak BEGIN:VCALENDAR)')
+  if (!first) throw new Error(t('The file has no calendar (no BEGIN:VCALENDAR)'))
   for (const other of comps) {
     if (other === first || other.name !== 'vcalendar') continue
     for (const sub of other.getAllSubcomponents()) {
@@ -272,7 +273,7 @@ function alarmsOf(comp: IcalComponent, durationSec: number): AlarmSpec[] {
 /** Read one VEVENT. Throws when it has no usable DTSTART. */
 export function eventData(comp: IcalComponent): EventData {
   const s = propTime(comp, 'dtstart')
-  if (!s) throw new Error('Wydarzenie bez DTSTART')
+  if (!s) throw new Error(t('Event without DTSTART'))
   const all_day = s.time.isDate
   const start = timeToMs(s.time, s.tzid)
   let end: number
@@ -579,7 +580,7 @@ export function setParticipants(ev: IcalComponent, organizer: Address | null, at
 function withConferenceInDescription(description: string | null | undefined, url: string | null | undefined): string | null {
   const d = description || ''
   if (!url || d.includes(url)) return d || null
-  return `${d ? `${d}\n\n` : ''}Dołącz do spotkania: ${url}`
+  return `${d ? `${d}\n\n` : ''}${t('Join the meeting: {url}', { url })}`
 }
 
 export interface NewEventSpec {
@@ -644,7 +645,7 @@ export function buildEventIcs(s: NewEventSpec): string {
 function alarmComponent(minutesBefore: number): IcalComponent {
   const va = new ICAL.Component('valarm')
   va.addPropertyWithValue('action', 'DISPLAY')
-  va.addPropertyWithValue('description', 'Przypomnienie')
+  va.addPropertyWithValue('description', t('Reminder'))
   va.addPropertyWithValue('trigger', ICAL.Duration.fromSeconds(-Math.round(minutesBefore * 60)))
   return va
 }
@@ -727,7 +728,7 @@ export function patchResource(
   const cal = parseIcs(ics)
   const list = vevents(cal, uid)
   const master = masterOf(list) ?? list[0]
-  if (!master) throw new Error('Wydarzenie nie ma komponentu VEVENT')
+  if (!master) throw new Error(t('The event has no VEVENT component'))
   const recurring = master.hasProperty('rrule') || master.hasProperty('rdate')
   let target = master
   if (ctx.occurrenceStart != null && recurring) {
@@ -807,7 +808,7 @@ export function excludeOccurrence(ics: string, uid: string, occurrenceStart: num
   const cal = parseIcs(ics)
   const list = vevents(cal, uid)
   const master = masterOf(list)
-  if (!master) throw new Error('Nie można usunąć pojedynczego wystąpienia — brak wydarzenia głównego')
+  if (!master) throw new Error(t('Cannot delete a single occurrence — the main event is missing'))
   const res = resourceFromCalendar(cal, uid)!
   for (const v of list) {
     const p = v.getFirstProperty('recurrence-id')
@@ -915,7 +916,7 @@ export function buildItipIcs(
 export function buildReplyIcs(inviteIcs: string, me: Address, partstat: string, comment?: string | null): string {
   const src = parseIcs(inviteIcs)
   const first = src.getAllSubcomponents('vevent')[0]
-  if (!first) throw new Error('Zaproszenie nie zawiera wydarzenia')
+  if (!first) throw new Error(t('The invitation contains no event'))
   const uid = uidOf(first)
   const out = newVcalendar()
   out.addPropertyWithValue('method', 'REPLY')

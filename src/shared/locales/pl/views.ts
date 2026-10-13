@@ -1,0 +1,171 @@
+// Polish translations: views. Keys are the English source strings used with t() / tp().
+import type { Dictionary } from '../../i18n'
+
+const dict: Dictionary = {
+  strings: {
+    // lib/format.ts (dates)
+    yesterday: 'wczoraj',
+    'Sun Mon Tue Wed Thu Fri Sat': 'nd pon wt śr czw pt sob',
+    Today: 'Dzisiaj',
+    Yesterday: 'Wczoraj',
+    'This week': 'W tym tygodniu',
+    'This month': 'W tym miesiącu',
+    'Clipboard unavailable': 'Schowek niedostępny',
+
+    // lib/store.ts
+    'in the system password store': 'w systemowym magazynie haseł',
+    'All done': 'Gotowe',
+    'Snooze set': 'Odłożono',
+    'Reminder set': 'Ustawiono przypomnienie',
+    Moved: 'Przeniesiono',
+    'Category changed': 'Zmieniono kategorię',
+    Undone: 'Cofnięto',
+    'This can no longer be undone': 'Nie da się już cofnąć',
+
+    // lib/web-bridge.ts
+    'Session expired': 'Sesja wygasła',
+    'Signing in with Google/Microsoft is available in the desktop app. In the browser, use an app password.':
+      'Logowanie przez Google/Microsoft jest dostępne w aplikacji na komputerze. W przeglądarce użyj hasła do aplikacji.',
+    '(home server)': '(serwer domowy)',
+    'Not available in the browser': 'Niedostępne w przeglądarce',
+
+    // views/AskView.tsx
+    'Which invoices did I get this month, and for how much?': 'Jakie faktury dostałem w tym miesiącu i na jakie kwoty?',
+    "What did I promise to reply to but haven't yet?": 'Na co obiecałem odpowiedzieć, a jeszcze tego nie zrobiłem?',
+    'When is the deadline for the project Sebastian wrote about?': 'Kiedy jest termin oddania projektu, o którym pisał Sebastian?',
+    'Summarize the most important messages from developers in the last week':
+      'Streść najważniejsze wiadomości od deweloperów z ostatniego tygodnia',
+    'Ask AI about your mail': 'Zapytaj AI o pocztę',
+    'Ollama ({model}) — local': 'Ollama ({model}) — lokalnie',
+    'AI off': 'AI wyłączone',
+    Close: 'Zamknij',
+    'What do you want to ask your mail?': 'O co chcesz zapytać swoją pocztę?',
+    'Answers are based on your messages, with sources [#ID].': 'Odpowiedzi opierają się na Twoich wiadomościach, ze źródłami [#ID].',
+    'Searching your mail…': 'Szukam w poczcie…',
+    'E.g. how much did I pay for hosting this year?': 'Np. ile zapłaciłem za hosting w tym roku?',
+
+    // views/AccountWizard.tsx
+    'Other (IMAP)': 'Inny (IMAP)',
+    'Google sign-in needs your own “OAuth Client ID” (free): Google Cloud Console → APIs & Services → Credentials →':
+      'Logowanie Google wymaga własnego „OAuth Client ID” (darmowe): Google Cloud Console → APIs & Services → Credentials →',
+    '→ type': '→ typ',
+    '. Enable Gmail API, Google Calendar API and People API, and add your address as a “Test user”.':
+      '. Włącz Gmail API, Google Calendar API i People API, a swój adres dodaj jako „Test user”.',
+    'Microsoft sign-in needs an “Application (client) ID” from Azure Portal → App registrations → New registration (personal and work accounts), platform':
+      'Logowanie Microsoft wymaga „Application (client) ID” z Azure Portal → App registrations → New registration (konta osobiste i firmowe), platforma',
+    'with the redirect URI': 'z adresem przekierowania',
+    'open console': 'otwórz konsolę',
+    'OAuth settings saved': 'Zapisano konfigurację OAuth',
+    Save: 'Zapisz',
+    'Enter your address first so the server settings can be detected': 'Najpierw wpisz adres — wykryję ustawienia serwera',
+    'Added {email} — first sync in progress': 'Dodano {email} — trwa pierwsza synchronizacja',
+    'Finish signing in in your browser…': 'Dokończ logowanie w przeglądarce…',
+    'Added {email}': 'Dodano {email}',
+    'Welcome to Octopus Mail': 'Witaj w Octopus Mail',
+    'Free email with Smart Inbox, AI and a calendar. Everything stays on this computer, and passwords are kept {secretStore}.':
+      'Darmowa poczta z Smart Inbox, AI i kalendarzem. Wszystko zostaje na tym komputerze, a hasła są przechowywane {secretStore}.',
+    'Email address': 'Adres e-mail',
+    'you@example.com': 'ty@przyklad.pl',
+    'Your name (sender)': 'Twoje imię i nazwisko (nadawca)',
+    'e.g. John Smith': 'np. Jan Kowalski',
+    'Sign in without a password (OAuth)': 'Logowanie bez hasła (OAuth)',
+    'Sign in with Google': 'Zaloguj przez Google',
+    'Sign in with Microsoft': 'Zaloguj przez Microsoft',
+    '…or use an app password below.': '…albo użyj hasła do aplikacji poniżej.',
+    'Password (or app password)': 'Hasło (lub hasło do aplikacji)',
+    'Create a Google app password': 'Utwórz hasło do aplikacji Google',
+    'Detecting server settings…': 'Wykrywam ustawienia serwera…',
+    change: 'zmień',
+    'IMAP server': 'Serwer IMAP',
+    'IMAP over SSL/TLS': 'IMAP przez SSL/TLS',
+    'SMTP server': 'Serwer SMTP',
+    'SMTP over SSL (465)': 'SMTP przez SSL (465)',
+    'off = STARTTLS (587)': 'wyłączone = STARTTLS (587)',
+    'Username (if different from the address)': 'Login (jeśli inny niż adres)',
+    'Days back': 'Dni wstecz',
+    'Add account': 'Dodaj konto',
+
+    // views/ContactsView.tsx
+    People: 'Ludzie',
+    Notifications: 'Powiadomienia',
+    Newsletters: 'Newslettery',
+    'Accepted sender': 'Zaakceptowany nadawca',
+    'New sender (not accepted)': 'Nowy nadawca (niezaakceptowany)',
+    'Blocked sender': 'Zablokowany',
+    'added manually': 'dodany ręcznie',
+    blocked: 'zablokowany',
+    'Contact saved': 'Zapisano kontakt',
+    'Email address copied': 'Skopiowano adres e-mail',
+    "Couldn't copy the address": 'Nie udało się skopiować adresu',
+    'Copy address': 'Kopiuj adres',
+    Write: 'Napisz',
+    'All messages': 'Wszystkie wiadomości',
+    'Sender accepted': 'Zaakceptowano nadawcę',
+    Accept: 'Akceptuj',
+    'Sender unblocked': 'Odblokowano nadawcę',
+    Unblock: 'Odblokuj',
+    'Sender blocked': 'Zablokowano nadawcę',
+    Block: 'Zablokuj',
+    Statistics: 'Statystyki',
+    'Sent to': 'Wysłane do',
+    'Received from': 'Odebrane od',
+    'Last contact:': 'Ostatni kontakt:',
+    none: 'brak',
+    Sender: 'Nadawca',
+    'Priority sender': 'Nadawca priorytetowy',
+    'Priority removed': 'Usunięto priorytet',
+    'Priority (VIP)': 'Priorytetowy (VIP)',
+    'Their messages go to the top of Smart Inbox.': 'Wiadomości trafiają na górę Smart Inbox.',
+    Category: 'Kategoria',
+    Automatic: 'Automatycznie',
+    'Contact details': 'Dane kontaktowe',
+    Cancel: 'Anuluj',
+    'Full name': 'Imię i nazwisko',
+    Phone: 'Telefon',
+    '+1 …': '+48 …',
+    Company: 'Firma',
+    Notes: 'Notatki',
+    'Only visible to you': 'Widoczne tylko dla Ciebie',
+    'Recent messages': 'Ostatnie wiadomości',
+    'Show all': 'Pokaż wszystkie',
+    'No messages with this contact in downloaded mail.': 'Brak wiadomości z tym kontaktem w pobranej poczcie.',
+    'Sent message': 'Wysłana',
+    'Received message': 'Odebrana',
+    '(no subject)': '(bez tematu)',
+    'No Google accounts signed in with OAuth — add a Google account in Settings → Accounts.':
+      'Brak kont Google zalogowanych przez OAuth — dodaj konto Google w Ustawieniach → Konta.',
+    'No contacts were downloaded from Google — check that the account has access to Google Contacts.':
+      'Nie pobrano żadnych kontaktów z Google — sprawdź, czy konto ma dostęp do Google Contacts.',
+    Contacts: 'Kontakty',
+    'Download the address book from your Google accounts (OAuth)': 'Pobierz książkę adresową z kont Google (OAuth)',
+    'Sync Google contacts': 'Synchronizuj kontakty Google',
+    'Search by name or address…': 'Szukaj po nazwie lub adresie…',
+    All: 'Wszystkie',
+    'Blocked senders': 'Zablokowani',
+    'Nothing found': 'Nic nie znaleziono',
+    'No one is blocked': 'Nikogo nie zablokowano',
+    'No contacts': 'Brak kontaktów',
+    'No contacts match “{query}”.': 'Brak kontaktów pasujących do „{query}”.',
+    "Blocked senders appear here — their messages don't show up in your inbox.":
+      'Zablokowani nadawcy trafiają tutaj — ich wiadomości nie pojawiają się w skrzynce.',
+    'Contacts are created automatically from your mail. You can also download your address book from Google.':
+      'Kontakty tworzą się same z korespondencji. Możesz też pobrać książkę adresową z Google.',
+    'Select a contact': 'Wybierz kontakt',
+    "You'll see contact details, mail statistics and recent messages here.":
+      'Zobaczysz tu dane kontaktu, statystyki korespondencji i ostatnie wiadomości.',
+  },
+  plurals: {
+    'Synced {n} address from Google Contacts': [
+      'Zsynchronizowano {n} adres z Google Contacts',
+      'Zsynchronizowano {n} adresy z Google Contacts',
+      'Zsynchronizowano {n} adresów z Google Contacts',
+    ],
+    // the Polish text always said "dni" (the field is a number of days, normally 30–365)
+    'Your IMAP and SMTP sign-in is checked before saving. Mail from the last {n} day is downloaded now; older mail loads as you scroll.': [
+      'Przed zapisaniem sprawdzam logowanie IMAP i SMTP. Pobieram pocztę z ostatnich {n} dni, a starszą doczytuję przy przewijaniu.',
+      'Przed zapisaniem sprawdzam logowanie IMAP i SMTP. Pobieram pocztę z ostatnich {n} dni, a starszą doczytuję przy przewijaniu.',
+      'Przed zapisaniem sprawdzam logowanie IMAP i SMTP. Pobieram pocztę z ostatnich {n} dni, a starszą doczytuję przy przewijaniu.',
+    ],
+  },
+}
+export default dict

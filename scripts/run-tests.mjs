@@ -27,5 +27,7 @@ await build({
 })
 
 const files = fs.readdirSync(outDir).filter((f) => f.endsWith('.cjs')).map((f) => path.join(outDir, f))
-const r = spawnSync(process.execPath, ['--test', '--test-concurrency=1', '--test-reporter=spec', '--test-timeout=60000', '--test-force-exit', ...files], { stdio: 'inherit', cwd: root })
+// engine messages are checked in Polish; tests/i18n.test.ts covers English explicitly
+const env = { ...process.env, OCTO_LANG: process.env.OCTO_LANG || 'pl' }
+const r = spawnSync(process.execPath, ['--test', '--test-concurrency=1', '--test-reporter=spec', '--test-timeout=60000', '--test-force-exit', ...files], { stdio: 'inherit', cwd: root, env })
 process.exit(r.status ?? 1)

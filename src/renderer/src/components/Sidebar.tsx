@@ -8,6 +8,7 @@ import logo from '../assets/logo.svg'
 import { api } from '../lib/api'
 import { useStore } from '../lib/store'
 import { askText, cx, IconButton, Menu, type MenuItem, Spinner } from './ui'
+import { dateLocale, t } from '../../../shared/i18n'
 
 function sameRef(a: MailboxRef, b: MailboxRef): boolean {
   return JSON.stringify(a) === JSON.stringify(b)
@@ -62,8 +63,8 @@ const ROLE_ICON: Record<string, ReactNode> = {
   flagged: <Pin size={15} />, important: <Bell size={15} />,
 }
 const ROLE_LABEL: Record<string, string> = {
-  inbox: 'Odebrane', sent: 'Wysłane', drafts: 'Wersje robocze', archive: 'Archiwum', all: 'Wszystkie', trash: 'Kosz',
-  junk: 'Spam', blocked: 'Zablokowane', flagged: 'Oznaczone', important: 'Ważne',
+  inbox: t('Inbox'), sent: t('Sent'), drafts: t('Drafts'), archive: t('Archive'), all: t('All mail'), trash: t('Trash'),
+  junk: t('Spam'), blocked: t('Blocked'), flagged: t('Flagged'), important: t('Important'),
 }
 
 function AccountFolders({ accountId, folders }: { accountId: number; folders: Folder[] }) {
@@ -73,27 +74,27 @@ function AccountFolders({ accountId, folders }: { accountId: number; folders: Fo
   const sorted = useMemo(() => {
     const roleOrder = ['inbox', 'flagged', 'drafts', 'sent', 'archive', 'all', 'junk', 'blocked', 'trash']
     const sys = folders.filter((f) => f.role && f.role !== 'important').sort((a, b) => roleOrder.indexOf(a.role!) - roleOrder.indexOf(b.role!))
-    const user = folders.filter((f) => !f.role && f.path !== '[Gmail]').sort((a, b) => a.path.localeCompare(b.path, 'pl'))
+    const user = folders.filter((f) => !f.role && f.path !== '[Gmail]').sort((a, b) => a.path.localeCompare(b.path, dateLocale()))
     return { sys, user }
   }, [folders])
   const depth = (f: Folder) => (f.delimiter ? f.path.split(f.delimiter).length - 1 : 0)
   const items: MenuItem[] = menu
     ? [
-        { label: 'Synchronizuj teraz', icon: <RefreshCw size={14} />, onClick: () => void api.syncFolder(menu.folder.id) },
-        { label: 'Zawsze synchronizuj w tle', onClick: () => void api.setFolderSync(menu.folder.id, 'always') },
-        { label: 'Nie synchronizuj', onClick: () => void api.setFolderSync(menu.folder.id, 'never') },
+        { label: t('Sync now'), icon: <RefreshCw size={14} />, onClick: () => void api.syncFolder(menu.folder.id) },
+        { label: t('Always sync in the background'), onClick: () => void api.setFolderSync(menu.folder.id, 'always') },
+        { label: t('Don’t sync'), onClick: () => void api.setFolderSync(menu.folder.id, 'never') },
         { separator: true, label: '' },
         {
-          label: 'Zmień nazwę…', disabled: !!menu.folder.role,
+          label: t('Rename…'), disabled: !!menu.folder.role,
           onClick: async () => {
-            const name = await askText('Nowa nazwa folderu', menu.folder.name)
+            const name = await askText(t('New folder name'), menu.folder.name)
             if (name) void api.renameFolder(menu.folder.id, name).catch((e) => toast({ level: 'error', message: String(e) }))
           },
         },
         {
-          label: 'Usuń folder', danger: true, disabled: !!menu.folder.role,
+          label: t('Delete folder'), danger: true, disabled: !!menu.folder.role,
           onClick: () => {
-            if (window.confirm(`Usunąć folder „${menu.folder.name}” razem z zawartością na serwerze?`)) void api.deleteFolder(menu.folder.id).catch((e) => toast({ level: 'error', message: String(e) }))
+            if (window.confirm(t('Delete the folder “{name}” and everything in it on the server?', { name: menu.folder.name }))) void api.deleteFolder(menu.folder.id).catch((e) => toast({ level: 'error', message: String(e) }))
           },
         },
       ]
@@ -126,7 +127,7 @@ export default function Sidebar() {
       <div className="flex items-center gap-2 px-3 pb-2 pt-3">
         <img src={logo} alt="" className="h-8 w-8" draggable={false} />
         <div className="flex-1 font-semibold tracking-tight">Octopus Mail</div>
-        <IconButton title="Synchronizuj teraz" onClick={() => void api.syncNow().catch(() => undefined)}>
+        <IconButton title={t('Sync now')} onClick={() => void api.syncNow().catch(() => undefined)}>
           {syncing ? <Spinner /> : <RefreshCw size={15} />}
         </IconButton>
       </div>
@@ -135,33 +136,33 @@ export default function Sidebar() {
           onClick={() => compose({ mode: 'new' })}
           className="flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-accent text-[13.5px] font-medium text-accent-fg shadow-sm hover:brightness-110"
         >
-          <PenSquare size={15} /> Nowa wiadomość
+          <PenSquare size={15} /> {t('New message')}
         </button>
       </div>
 
       <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-        <Item icon={<Inbox size={15} />} label={settings?.smartInbox === false ? 'Odebrane' : 'Smart Inbox'} count={c?.inboxUnread} refTo={{ kind: 'smart' }} />
+        <Item icon={<Inbox size={15} />} label={settings?.smartInbox === false ? t('Inbox') : t('Smart Inbox')} count={c?.inboxUnread} refTo={{ kind: 'smart' }} />
         {settings?.smartInbox !== false && (
           <div className="ml-3 border-l border-line pl-1.5">
-            <Item icon={<Users size={14} />} label="Ludzie" count={c?.categories.people} refTo={{ kind: 'category', category: 'people' }} color="var(--people)" dim />
-            <Item icon={<Bell size={14} />} label="Powiadomienia" count={c?.categories.notification} refTo={{ kind: 'category', category: 'notification' }} color="var(--notification)" dim />
-            <Item icon={<Newspaper size={14} />} label="Newslettery" count={c?.categories.newsletter} refTo={{ kind: 'category', category: 'newsletter' }} color="var(--newsletter)" dim />
+            <Item icon={<Users size={14} />} label={t('People')} count={c?.categories.people} refTo={{ kind: 'category', category: 'people' }} color="var(--people)" dim />
+            <Item icon={<Bell size={14} />} label={t('Notifications')} count={c?.categories.notification} refTo={{ kind: 'category', category: 'notification' }} color="var(--notification)" dim />
+            <Item icon={<Newspaper size={14} />} label={t('Newsletters')} count={c?.categories.newsletter} refTo={{ kind: 'category', category: 'newsletter' }} color="var(--newsletter)" dim />
           </div>
         )}
-        {!!c?.newsenders && <Item icon={<ShieldQuestion size={15} />} label="Nowi nadawcy" count={c.newsenders} refTo={{ kind: 'newsenders' }} color="var(--warning)" />}
-        <Item icon={<Pin size={15} />} label="Przypięte" count={c?.pinned} refTo={{ kind: 'pinned' }} color="var(--pin)" />
-        <Item icon={<Clock size={15} />} label="Odłożone" count={c?.snoozed} refTo={{ kind: 'snoozed' }} />
-        <Item icon={<Coffee size={15} />} label="Na boku" count={c?.setaside} refTo={{ kind: 'setaside' }} />
-        <Item icon={<AlarmClock size={15} />} label="Przypomnienia" count={c?.reminders} refTo={{ kind: 'reminders' }} />
-        <Item icon={<Send size={15} />} label="Zaplanowane" count={c?.scheduled} refTo={{ kind: 'scheduled' }} />
-        <Item icon={<FileEdit size={15} />} label="Wersje robocze" count={c?.drafts} refTo={{ kind: 'local-drafts' }} />
-        <Item icon={<Send size={15} />} label="Wysłane" refTo={{ kind: 'unified', role: 'sent' }} dim />
-        <Item icon={<Archive size={15} />} label="Archiwum" refTo={{ kind: 'unified', role: 'archive' }} dim />
-        <Item icon={<TriangleAlert size={15} />} label="Spam" refTo={{ kind: 'unified', role: 'junk' }} dim />
-        <Item icon={<Trash2 size={15} />} label="Kosz" refTo={{ kind: 'unified', role: 'trash' }} dim />
+        {!!c?.newsenders && <Item icon={<ShieldQuestion size={15} />} label={t('New senders')} count={c.newsenders} refTo={{ kind: 'newsenders' }} color="var(--warning)" />}
+        <Item icon={<Pin size={15} />} label={t('Pinned')} count={c?.pinned} refTo={{ kind: 'pinned' }} color="var(--pin)" />
+        <Item icon={<Clock size={15} />} label={t('Snoozed')} count={c?.snoozed} refTo={{ kind: 'snoozed' }} />
+        <Item icon={<Coffee size={15} />} label={t('Set Aside')} count={c?.setaside} refTo={{ kind: 'setaside' }} />
+        <Item icon={<AlarmClock size={15} />} label={t('Reminders')} count={c?.reminders} refTo={{ kind: 'reminders' }} />
+        <Item icon={<Send size={15} />} label={t('Scheduled')} count={c?.scheduled} refTo={{ kind: 'scheduled' }} />
+        <Item icon={<FileEdit size={15} />} label={t('Drafts')} count={c?.drafts} refTo={{ kind: 'local-drafts' }} />
+        <Item icon={<Send size={15} />} label={t('Sent')} refTo={{ kind: 'unified', role: 'sent' }} dim />
+        <Item icon={<Archive size={15} />} label={t('Archive')} refTo={{ kind: 'unified', role: 'archive' }} dim />
+        <Item icon={<TriangleAlert size={15} />} label={t('Spam')} refTo={{ kind: 'unified', role: 'junk' }} dim />
+        <Item icon={<Trash2 size={15} />} label={t('Trash')} refTo={{ kind: 'unified', role: 'trash' }} dim />
 
         {smartFolders.length > 0 && (
-          <Section title="Inteligentne foldery">
+          <Section title={t('Smart folders')}>
             {smartFolders.map((sf) => (
               <Item
                 key={sf.id}
@@ -170,7 +171,7 @@ export default function Sidebar() {
                 refTo={{ kind: 'smartfolder', id: sf.id }}
                 onContext={(e) => {
                   e.preventDefault()
-                  if (window.confirm(`Usunąć inteligentny folder „${sf.name}”? (wiadomości zostają)`)) void api.deleteSmartFolder(sf.id)
+                  if (window.confirm(t('Delete the smart folder “{name}”? (messages stay)', { name: sf.name }))) void api.deleteSmartFolder(sf.id)
                 }}
               />
             ))}
@@ -197,10 +198,10 @@ export default function Sidebar() {
                 <AccountFolders accountId={a.id} folders={folders.filter((f) => f.account_id === a.id)} />
                 <Item
                   icon={<BookmarkPlus size={14} />}
-                  label="Nowy folder…"
+                  label={t('New folder…')}
                   dim
                   onClick={async () => {
-                    const name = await askText(`Nowy folder w ${a.email}`, '', 'Nazwa folderu')
+                    const name = await askText(t('New folder in {account}', { account: a.email }), '', t('Folder name'))
                     if (name) void api.createFolder(a.id, name).catch((e) => toast({ level: 'error', message: String(e) }))
                   }}
                   active={false}
@@ -214,7 +215,7 @@ export default function Sidebar() {
       <div className="border-t border-line px-2 py-2">
         {server && !server.online && (
           <button onClick={() => setView('settings')} className="mb-1.5 flex w-full items-center gap-2 rounded-lg bg-warning/15 px-2.5 py-1.5 text-left text-[12px] text-warning" title={server.url}>
-            <TriangleAlert size={14} /> <span className="truncate">Brak połączenia z serwerem domowym</span>
+            <TriangleAlert size={14} /> <span className="truncate">{t('No connection to the home server')}</span>
           </button>
         )}
         {errors.length > 0 && (
@@ -223,16 +224,16 @@ export default function Sidebar() {
           </button>
         )}
         <div className="flex items-center justify-between">
-          <IconButton title="Zapytaj AI o pocztę" active={view === 'ask'} onClick={() => setView('ask')}>
+          <IconButton title={t('Ask AI about your mail')} active={view === 'ask'} onClick={() => setView('ask')}>
             <Sparkles size={16} />
           </IconButton>
-          <IconButton title="Kalendarz" active={view === 'calendar'} onClick={() => setView('calendar')}>
+          <IconButton title={t('Calendar')} active={view === 'calendar'} onClick={() => setView('calendar')}>
             <CalendarDays size={16} />
           </IconButton>
-          <IconButton title="Kontakty" active={view === 'contacts'} onClick={() => setView('contacts')}>
+          <IconButton title={t('Contacts')} active={view === 'contacts'} onClick={() => setView('contacts')}>
             <Contact size={16} />
           </IconButton>
-          <IconButton title="Ustawienia" active={view === 'settings'} onClick={() => setView('settings')}>
+          <IconButton title={t('Settings')} active={view === 'settings'} onClick={() => setView('settings')}>
             <Settings size={16} />
           </IconButton>
         </div>

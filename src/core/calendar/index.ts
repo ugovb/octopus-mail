@@ -3,7 +3,7 @@
 // availability and reminders.
 export {
   addCalendarSource, type CalendarSourceInfo, type CalendarSourceInput, ensureGoogleCalendarSources, listCalendarSources,
-  LOCAL_CALENDAR_NAME, removeCalendarSource,
+  localCalendarName, removeCalendarSource,
 } from './sources'
 export { syncCalendars } from './calsync'
 export { type CalendarOccurrence, getEvent, listCalendars, listEvents, updateCalendar } from './store'

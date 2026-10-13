@@ -2,13 +2,14 @@ import { Menu } from 'lucide-react'
 import { useNarrow } from '../lib/narrow'
 import { useStore } from '../lib/store'
 import { IconButton } from './ui'
+import { t } from '../../../shared/i18n'
 
 /** Phone layout: opens the sidebar drawer. Renders nothing on wider screens. */
 export default function DrawerButton() {
   const narrow = useNarrow()
   if (!narrow) return null
   return (
-    <IconButton title="Menu" onClick={() => useStore.setState({ drawer: true })}>
+    <IconButton title={t('Menu')} onClick={() => useStore.setState({ drawer: true })}>
       <Menu size={18} />
     </IconButton>
   )

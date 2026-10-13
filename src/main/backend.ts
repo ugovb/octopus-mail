@@ -4,6 +4,7 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, net } from 'electron'
 import type { AppSettings, CoreEvent, DraftAttachment } from '../shared/types'
+import { t } from '../shared/i18n'
 import { STREAMING_METHODS } from '../shared/streaming'
 import { decodeWire, encodeWire } from '../shared/wire'
 import { initCore, startEngine, stopEngine } from '../core/boot'
@@ -32,6 +33,8 @@ export interface Backend {
   stream(method: string, args: unknown[], onDelta: (t: string) => void): Promise<unknown>
   onEvent(fn: (ev: CoreEvent) => void): () => void
   settings(): AppSettings
+  /** Called with fresh settings after they change (local: after the engine's own listeners; remote: once fetched). */
+  onSettingsChanged(fn: (s: AppSettings) => void): () => void
   unreadCount(): Promise<number>
   /** Details of new messages for desktop notifications (already filtered by the account's notify mode). */
   newMailInfo(accountId: number, ids: number[]): Promise<NewMailInfo[]>
@@ -58,13 +61,13 @@ export class LocalBackend implements Backend {
 
   async call(method: string, args: unknown[]): Promise<unknown> {
     const fn = this.svc[method]
-    if (typeof fn !== 'function') throw new Error(`Nieznana metoda ${method}`)
+    if (typeof fn !== 'function') throw new Error(t('Unknown method {method}', { method }))
     return await fn(...(args || []))
   }
 
   async stream(method: string, args: unknown[], onDelta: (t: string) => void): Promise<unknown> {
     const at = STREAMING_METHODS[method]
-    if (at === undefined) throw new Error(`Metoda ${method} nie obsługuje strumieniowania`)
+    if (at === undefined) throw new Error(t('Method {method} does not support streaming', { method }))
     const a = [...(args || [])].slice(0, at)
     while (a.length < at) a.push(undefined)
     a[at] = onDelta
@@ -77,6 +80,13 @@ export class LocalBackend implements Backend {
 
   settings(): AppSettings {
     return getSettings()
+  }
+
+  onSettingsChanged(fn: (s: AppSettings) => void): () => void {
+    // deferred so core/boot has re-applied its own language first
+    return bus.onEvent((ev) => {
+      if (ev.type === 'settings-changed') setImmediate(() => fn(getSettings()))
+    })
   }
 
   async unreadCount(): Promise<number> {
@@ -136,6 +146,7 @@ export function loadRemoteConfig(): RemoteConfig | null {
 export class RemoteBackend implements Backend {
   kind = 'remote' as const
   private listeners = new Set<(ev: CoreEvent) => void>()
+  private settingsListeners = new Set<(s: AppSettings) => void>()
   private cachedSettings: AppSettings = DEFAULT_SETTINGS
   private accountsNotify = new Map<number, string>()
   private uploads = new Map<string, DraftAttachment>()
@@ -154,16 +165,16 @@ export class RemoteBackend implements Backend {
     try {
       r = await fetch(`${this.cfg.url}${pathname}`, { ...init, headers: { ...this.headers(), ...(init.headers as Record<string, string>) } })
     } catch (e) {
-      throw new Error(`Brak połączenia z serwerem domowym (${this.cfg.url}): ${(e as Error).message}`)
+      throw new Error(t("Can't reach the home server ({url}): {error}", { url: this.cfg.url, error: (e as Error).message }))
     }
-    if (r.status === 401) throw new Error('Serwer domowy odrzucił to urządzenie — sparuj je ponownie (Ustawienia → Serwer domowy).')
+    if (r.status === 401) throw new Error(t('The home server rejected this device — pair it again (Settings → Home server).'))
     return r
   }
 
   async start(): Promise<void> {
     void this.listen()
     try {
-      this.cachedSettings = (await this.call('getSettings', [])) as AppSettings
+      this.setSettings((await this.call('getSettings', [])) as AppSettings)
       await this.refreshAccounts()
     } catch {
       /* offline at startup: the event loop keeps retrying */
@@ -208,7 +219,7 @@ export class RemoteBackend implements Backend {
     const r = await this.request('/api/call', { method: 'POST', body: encodeWire({ method, args }) })
     const j = decodeWire<{ result?: unknown; error?: string }>(await r.text())
     if (j.error) throw new Error(j.error)
-    if (method === 'updateSettings') this.cachedSettings = j.result as AppSettings
+    if (method === 'updateSettings') this.setSettings(j.result as AppSettings)
     return j.result
   }
 
@@ -241,8 +252,17 @@ export class RemoteBackend implements Backend {
     return () => this.listeners.delete(fn)
   }
 
+  private setSettings(s: AppSettings): void {
+    this.cachedSettings = s
+    for (const l of this.settingsListeners) l(s)
+  }
+
+  private refreshSettings(): void {
+    void this.call('getSettings', []).then((s) => this.setSettings(s as AppSettings)).catch(() => undefined)
+  }
+
   private emit(ev: CoreEvent): void {
-    if (ev.type === 'settings-changed') void this.call('getSettings', []).then((s) => (this.cachedSettings = s as AppSettings)).catch(() => undefined)
+    if (ev.type === 'settings-changed') this.refreshSettings()
     if (ev.type === 'mailbox-changed' && ev.accountId === undefined) void this.refreshAccounts().catch(() => undefined)
     for (const l of this.listeners) l(ev)
   }
@@ -251,7 +271,10 @@ export class RemoteBackend implements Backend {
     if (this.online === online) return
     this.online = online
     this.emit({ type: 'server-connection', online, url: this.cfg.url } as CoreEvent)
-    if (online) this.emit({ type: 'mailbox-changed' })
+    if (online) {
+      this.emit({ type: 'mailbox-changed' })
+      this.refreshSettings() // started offline: the cached settings are still the defaults
+    }
   }
 
   /** Live events over Server-Sent Events; reconnects with backoff. */
@@ -263,7 +286,7 @@ export class RemoteBackend implements Backend {
         const r = await fetch(`${this.cfg.url}/api/events`, { headers: this.headers(), signal: this.abort.signal })
         if (r.status === 401) {
           this.setOnline(false)
-          this.emit({ type: 'toast', level: 'error', message: 'Serwer domowy odrzucił to urządzenie — sparuj je ponownie (Ustawienia → Serwer domowy).' })
+          this.emit({ type: 'toast', level: 'error', message: t('The home server rejected this device — pair it again (Settings → Home server).') })
           return
         }
         if (!r.ok || !r.body) throw new Error(`HTTP ${r.status}`)
@@ -304,6 +327,11 @@ export class RemoteBackend implements Backend {
     return this.cachedSettings
   }
 
+  onSettingsChanged(fn: (s: AppSettings) => void): () => void {
+    this.settingsListeners.add(fn)
+    return () => this.settingsListeners.delete(fn)
+  }
+
   async unreadCount(): Promise<number> {
     const c = (await this.call('counts', [])) as { inboxUnread: number }
     return c.inboxUnread
@@ -328,10 +356,10 @@ export class RemoteBackend implements Backend {
     const dir = path.join(app.getPath('userData'), 'remote-attachments')
     fs.mkdirSync(dir, { recursive: true })
     const r = await this.request(`/api/attachment/${attId}`)
-    if (!r.ok) throw new Error(`Serwer nie zwrócił załącznika (HTTP ${r.status})`)
+    if (!r.ok) throw new Error(t("The server didn't return the attachment (HTTP {status})", { status: r.status }))
     const disp = r.headers.get('content-disposition') || ''
     const m = disp.match(/filename\*=UTF-8''([^;]+)/)
-    const name = (m ? decodeURIComponent(m[1]) : `zalacznik-${attId}`).replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
+    const name = (m ? decodeURIComponent(m[1]) : t('attachment-{id}', { id: attId })).replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
     const file = path.join(dir, `${attId}-${name}`)
     fs.writeFileSync(file, Buffer.from(await r.arrayBuffer()))
     return file
@@ -349,10 +377,10 @@ export class RemoteBackend implements Backend {
     try {
       r = await fetch(`${u}/api/info`, { signal: AbortSignal.timeout(6000) })
     } catch (e) {
-      throw new Error(`Nie mogę połączyć się z ${u}: ${(e as Error).message}`)
+      throw new Error(t("Can't connect to {url}: {error}", { url: u, error: (e as Error).message }))
     }
     const j = (await r.json().catch(() => ({}))) as { name?: string; hostname: string; version: string }
-    if (j.name !== 'octopus-mail-server') throw new Error(`${u} nie jest serwerem Octopus Mail`)
+    if (j.name !== 'octopus-mail-server') throw new Error(t('{url} is not an Octopus Mail server', { url: u }))
     return j
   }
 
@@ -361,7 +389,7 @@ export class RemoteBackend implements Backend {
     const info = await RemoteBackend.probe(u)
     const r = await fetch(`${u}/api/pair`, { method: 'POST', body: encodeWire({ code, name: deviceName }) })
     const j = decodeWire<{ token?: string; device?: { id: string; name: string }; error?: string }>(await r.text())
-    if (!j.token || !j.device) throw new Error(j.error || `Parowanie nie powiodło się (HTTP ${r.status})`)
+    if (!j.token || !j.device) throw new Error(j.error || t('Pairing failed (HTTP {status})', { status: r.status }))
     return { url: u, token: j.token, deviceId: j.device.id, deviceName: j.device.name, serverName: info.hostname }
   }
 }

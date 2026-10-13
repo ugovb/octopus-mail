@@ -32,7 +32,7 @@ describe('home server without a mail server', () => {
     assert.equal(getSecret('account:1'), 'haslo-1')
     assert.ok(fs.existsSync(file))
     if (process.platform !== 'win32') assert.equal(fs.statSync(file).mode & 0o777, 0o600)
-    assert.match(secretStoreName(), /serwerze domowym/)
+    assert.match(secretStoreName(), /home server|serwerze domowym/)
   })
 
   it('sees secrets written by another process and does not overwrite them', () => {

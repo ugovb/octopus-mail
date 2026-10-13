@@ -11,9 +11,12 @@ import { initCore, startEngine, stopEngine } from '../core/boot'
 import { get } from '../core/db'
 import { bus, log } from '../core/events'
 import { createService } from '../core/service'
+import { t } from '../shared/i18n'
 import { authenticate, createPairingCode, listDevices, noteFailure, redeemPairingCode, revokeDevice, tooManyFailures } from './auth'
+import { browserDeviceName, langFromAcceptLanguage, loginPage, withLang } from './login'
+import { APP_VERSION } from '../shared/version'
 
-export const SERVER_VERSION = '0.1.0'
+export const SERVER_VERSION = APP_VERSION
 
 export interface ServeOptions {
   port?: number
@@ -55,7 +58,7 @@ function readBody(req: http.IncomingMessage, limit = MAX_BODY): Promise<Buffer> 
     req.on('data', (c: Buffer) => {
       size += c.length
       if (size > limit) {
-        reject(new Error('Za duże żądanie'))
+        reject(new Error(t('Request too large')))
         req.destroy()
         return
       }
@@ -68,28 +71,6 @@ function readBody(req: http.IncomingMessage, limit = MAX_BODY): Promise<Buffer> 
 
 /** Files the login page (and "Add to Home Screen") may load before the browser is paired. */
 const PUBLIC_FILES = new Set(['/logo.svg', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png'])
-
-function loginPage(error = ''): string {
-  return `<!doctype html><html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Octopus Mail — logowanie</title>
-<link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="theme-color" content="#15151b">
-<style>
-:root{color-scheme:light dark;--a:#5b4cf0}
-body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:"Segoe UI",system-ui,sans-serif;background:#f4f4f7;color:#1c1c22}
-@media (prefers-color-scheme:dark){body{background:#141418;color:#ececf2}.card{background:#1e1e24!important;border-color:#2e2e37!important}input{background:#141418;color:#ececf2;border-color:#2e2e37!important}}
-.card{width:min(380px,calc(100vw - 32px));background:#fff;border:1px solid #e3e3ea;border-radius:18px;padding:28px;box-sizing:border-box;text-align:center}
-img{width:64px;height:64px}h1{font-size:20px;margin:12px 0 4px}p{color:#6b6b78;font-size:13.5px;margin:0 0 18px}
-input{width:100%;box-sizing:border-box;height:44px;border:1px solid #e3e3ea;border-radius:10px;font-size:20px;letter-spacing:3px;text-align:center;text-transform:uppercase}
-button{margin-top:12px;width:100%;height:42px;border:0;border-radius:10px;background:var(--a);color:#fff;font-size:15px;font-weight:600}
-.err{color:#d93a3a;font-size:13px;margin-top:10px}
-code{font-size:12.5px}
-</style></head><body><form class="card" method="post" action="/api/login">
-<img src="/logo.svg" alt="" onerror="this.remove()"><h1>Octopus Mail</h1>
-<p>Wpisz kod parowania z serwera domowego.<br>Nowy kod: <code>octo server pair</code></p>
-<input name="code" placeholder="XXXX-XXXX" autocomplete="one-time-code" autofocus required maxlength="9">
-<button type="submit">Połącz</button>${error ? `<div class="err">${error}</div>` : ''}
-</form></body></html>`
-}
 
 export function lanAddresses(port: number): string[] {
   const out: string[] = []
@@ -110,6 +91,8 @@ export async function runServer(opts: ServeOptions = {}): Promise<http.Server> {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url || '/', 'http://local')
     const ip = clientIp(req)
+    // pages for browsers follow the browser's language; API errors follow the server's settings
+    const lang = langFromAcceptLanguage(req.headers['accept-language'])
     res.setHeader('X-Content-Type-Options', 'nosniff')
     res.setHeader('Referrer-Policy', 'no-referrer')
     try {
@@ -119,26 +102,25 @@ export async function runServer(opts: ServeOptions = {}): Promise<http.Server> {
         return send(res, 200, info)
       }
       if (url.pathname === '/api/pair' && req.method === 'POST') {
-        if (tooManyFailures(ip)) return send(res, 429, { error: 'Za dużo nieudanych prób — odczekaj 10 minut' })
+        if (tooManyFailures(ip)) return send(res, 429, { error: t('Too many failed attempts — wait 10 minutes') })
         const body = decodeWire<{ code?: string; name?: string }>((await readBody(req, 4096)).toString('utf8'))
-        const r = redeemPairingCode(String(body.code || ''), String(body.name || 'Komputer'), ip)
+        const r = redeemPairingCode(String(body.code || ''), String(body.name || t('Computer')), ip)
         if (!r) {
           noteFailure(ip)
-          return send(res, 403, { error: 'Nieprawidłowy albo wygasły kod parowania' })
+          return send(res, 403, { error: t('Invalid or expired pairing code') })
         }
         log('server', `paired device "${r.device.name}" from ${ip}`)
         return send(res, 200, r)
       }
       if (url.pathname === '/api/login' && req.method === 'POST') {
-        if (tooManyFailures(ip)) return send(res, 429, loginPage('Za dużo prób — odczekaj 10 minut.'), { 'Content-Type': 'text/html; charset=utf-8' })
+        if (tooManyFailures(ip)) return send(res, 429, loginPage(lang, 'too-many'), { 'Content-Type': 'text/html; charset=utf-8' })
         const form = new URLSearchParams((await readBody(req, 4096)).toString('utf8'))
         const ua = String(req.headers['user-agent'] || '')
-        const kind = /iphone|android|mobile/i.test(ua) ? 'Telefon' : 'Przeglądarka'
-        const r = redeemPairingCode(form.get('code') || '', `${kind} (${ip})`, ip)
+        const r = redeemPairingCode(form.get('code') || '', browserDeviceName(lang, ua, ip), ip)
         if (!r) {
           noteFailure(ip)
           res.writeHead(403, { 'Content-Type': 'text/html; charset=utf-8' })
-          return res.end(loginPage('Nieprawidłowy albo wygasły kod.'))
+          return res.end(loginPage(lang, 'bad-code'))
         }
         res.writeHead(303, {
           Location: '/',
@@ -154,10 +136,10 @@ export async function runServer(opts: ServeOptions = {}): Promise<http.Server> {
 
       if (!url.pathname.startsWith('/api/')) {
         // web UI (desktop browsers and phones)
-        if (!webRoot) return send(res, 404, 'Interfejs WWW nie jest dostępny w tej instalacji.')
+        if (!webRoot) return send(res, 404, withLang(lang, () => t('The web interface is not available in this installation.')))
         if (!device && !PUBLIC_FILES.has(url.pathname) && !url.pathname.startsWith('/assets/')) {
           res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
-          return res.end(loginPage())
+          return res.end(loginPage(lang))
         }
         const rel = url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname.slice(1))
         let file = path.resolve(webRoot, rel)
@@ -170,9 +152,9 @@ export async function runServer(opts: ServeOptions = {}): Promise<http.Server> {
         return fs.createReadStream(file).pipe(res)
       }
 
-      if (!device) return send(res, 401, { error: 'Brak autoryzacji — sparuj urządzenie z serwerem' })
+      if (!device) return send(res, 401, { error: t('Not authorized — pair this device with the server') })
       // cookie-authenticated writes must come from our own page (custom header = no cross-site forms)
-      if (viaCookie && req.method !== 'GET' && req.headers['x-octo'] !== '1') return send(res, 403, { error: 'Brak nagłówka X-Octo' })
+      if (viaCookie && req.method !== 'GET' && req.headers['x-octo'] !== '1') return send(res, 403, { error: t('Missing X-Octo header') })
 
       if (url.pathname === '/api/me') return send(res, 200, { device })
       if (url.pathname === '/api/logout' && req.method === 'POST') {
@@ -190,7 +172,7 @@ export async function runServer(opts: ServeOptions = {}): Promise<http.Server> {
       if (url.pathname === '/api/call' && req.method === 'POST') {
         const { method, args } = decodeWire<{ method: string; args: unknown[] }>((await readBody(req)).toString('utf8'))
         const fn = svc[method]
-        if (typeof fn !== 'function' || LOCAL_ONLY_METHODS.has(method) || method === 'actor') return send(res, 400, { error: `Nieznana metoda ${method}` })
+        if (typeof fn !== 'function' || LOCAL_ONLY_METHODS.has(method) || method === 'actor') return send(res, 400, { error: t('Unknown method {method}', { method }) })
         try {
           return send(res, 200, { result: await fn(...(args || [])) })
         } catch (e) {
@@ -201,7 +183,7 @@ export async function runServer(opts: ServeOptions = {}): Promise<http.Server> {
       if (url.pathname === '/api/stream' && req.method === 'POST') {
         const { method, args } = decodeWire<{ method: string; args: unknown[] }>((await readBody(req)).toString('utf8'))
         const at = STREAMING_METHODS[method]
-        if (at === undefined) return send(res, 400, { error: `Metoda ${method} nie obsługuje strumieniowania` })
+        if (at === undefined) return send(res, 400, { error: t('Method {method} does not support streaming', { method }) })
         res.writeHead(200, { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' })
         const a = [...(args || [])].slice(0, at)
         while (a.length < at) a.push(undefined)
@@ -252,12 +234,12 @@ export async function runServer(opts: ServeOptions = {}): Promise<http.Server> {
       }
 
       if (url.pathname === '/api/upload' && req.method === 'POST') {
-        const name = url.searchParams.get('name') || 'plik'
+        const name = url.searchParams.get('name') || t('file')
         const data = await readBody(req)
         return send(res, 200, { result: svc.stageAttachment(name, new Uint8Array(data)) })
       }
 
-      return send(res, 404, { error: 'Nie znaleziono' })
+      return send(res, 404, { error: t('Not found') })
     } catch (e) {
       log('server', 'request failed', req.method, url.pathname, (e as Error).message)
       if (!res.headersSent) send(res, 500, { error: (e as Error).message })

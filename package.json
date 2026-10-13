@@ -1,7 +1,7 @@
 {
   "name": "octopus-mail",
   "productName": "Octopus Mail",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Free, local-first desktop mail client with Smart Inbox, AI, calendar and an agent CLI",
   "author": {
     "name": "Krabi",
@@ -35,7 +35,8 @@
     "demo:seed": "node scripts/demo.mjs seed",
     "demo": "node scripts/demo.mjs app",
     "dist:linux": "npm run build && electron-builder --linux",
-    "dist:server": "npm run build && node scripts/pack-server.mjs"
+    "dist:server": "npm run build && node scripts/pack-server.mjs",
+    "i18n:check": "node scripts/i18n-check.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
@@ -140,7 +141,12 @@
       "shortcutName": "Octopus Mail",
       "installerSidebar": "resources/installerSidebar.bmp",
       "uninstallerSidebar": "resources/installerSidebar.bmp",
-      "artifactName": "Octopus-Mail-Setup-${version}.${ext}"
+      "artifactName": "Octopus-Mail-Setup-${version}.${ext}",
+      "multiLanguageInstaller": true,
+      "installerLanguages": [
+        "en_US",
+        "pl_PL"
+      ]
     },
     "protocols": [
       {
@@ -158,8 +164,8 @@
       "executableName": "octopus-mail",
       "icon": "resources/icon.png",
       "category": "Network;Email",
-      "synopsis": "Darmowy, lokalny klient poczty z Smart Inbox, AI i kalendarzem",
-      "description": "Octopus Mail — klient poczty IMAP/SMTP z Smart Inbox, GateKeeperem, odkładaniem, wysyłką zaplanowaną, AI (Ollama/Claude), kalendarzem CalDAV oraz CLI i serwerem MCP dla agentów AI.",
+      "synopsis": "Free, local-first mail client with Smart Inbox, AI and calendar",
+      "description": "Octopus Mail: IMAP/SMTP mail client with Smart Inbox, Gatekeeper, snooze, send later, AI (Ollama/Claude), CalDAV calendar, a home server and a CLI/MCP server for AI agents.",
       "mimeTypes": [
         "x-scheme-handler/octopus-mail"
       ],

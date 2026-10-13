@@ -2,7 +2,9 @@ import { create } from 'zustand'
 import type {
   Account, AppSettings, Category, CoreEvent, Folder, MailboxRef, SmartFolder, SyncStatus, ThreadSummary,
 } from '../../../shared/types'
+import { t } from '../../../shared/i18n'
 import { api, errorText } from './api'
+import { syncLanguage } from './lang'
 import { isNarrow } from './narrow'
 
 export type View = 'mail' | 'calendar' | 'contacts' | 'settings' | 'ask'
@@ -118,11 +120,13 @@ export const useStore = create<State>((set, get) => ({
   moveFor: null,
   aiPanel: false,
   drawer: false,
-  secretStore: 'w systemowym magazynie haseł',
+  secretStore: t('in the system password store'),
   server: null,
 
   async boot() {
     const [settings, accounts, platform] = await Promise.all([api.getSettings(), api.listAccounts(), api.platform()])
+    // the language is applied before the UI loads: reload if the saved choice was out of date
+    if (syncLanguage(settings.language)) return location.reload()
     set({ settings, accounts, secretStore: platform.secretStore })
     const st = await window.octo.serverStatus().catch(() => null)
     if (st?.mode === 'remote') set({ server: { url: st.url, online: st.online } })
@@ -285,7 +289,7 @@ export const useStore = create<State>((set, get) => ({
         unsubscribe: () => api.unsubscribe(targets),
       }
       const r = await call[action]()
-      if (action !== 'read') get().toast({ level: 'info', message: r.message || 'Gotowe', undo: r.undo })
+      if (action !== 'read') get().toast({ level: 'info', message: r.message || t('All done'), undo: r.undo })
       await get().refreshList(true)
       void get().refreshMeta()
     } catch (e) {
@@ -298,7 +302,7 @@ export const useStore = create<State>((set, get) => ({
     removeFromList(ids)
     try {
       const r = await api.snooze(ids, until)
-      get().toast({ level: 'info', message: r.message || 'Odłożono', undo: r.undo })
+      get().toast({ level: 'info', message: r.message || t('Snooze set'), undo: r.undo })
     } catch (e) {
       get().toast({ level: 'error', message: errorText(e) })
     }
@@ -309,7 +313,7 @@ export const useStore = create<State>((set, get) => ({
   async remind(ids, at, kind = 'manual') {
     try {
       const r = await api.remind(ids, at, kind)
-      get().toast({ level: 'info', message: r.message || 'Ustawiono przypomnienie', undo: r.undo })
+      get().toast({ level: 'info', message: r.message || t('Reminder set'), undo: r.undo })
     } catch (e) {
       get().toast({ level: 'error', message: errorText(e) })
     }
@@ -320,7 +324,7 @@ export const useStore = create<State>((set, get) => ({
     removeFromList(ids)
     try {
       const r = await api.moveToFolder(ids, folderId)
-      get().toast({ level: 'info', message: r.message || 'Przeniesiono', undo: r.undo })
+      get().toast({ level: 'info', message: r.message || t('Moved'), undo: r.undo })
     } catch (e) {
       get().toast({ level: 'error', message: errorText(e) })
     }
@@ -330,7 +334,7 @@ export const useStore = create<State>((set, get) => ({
   async senders(action, emails) {
     try {
       const r = action === 'accept' ? await api.acceptSenders(emails) : action === 'block' ? await api.blockSenders(emails) : await api.prioritySender(emails, action === 'vip')
-      get().toast({ level: 'info', message: r.message || 'Gotowe', undo: r.undo })
+      get().toast({ level: 'info', message: r.message || t('All done'), undo: r.undo })
     } catch (e) {
       get().toast({ level: 'error', message: errorText(e) })
     }
@@ -341,7 +345,7 @@ export const useStore = create<State>((set, get) => ({
   async categorize(emails, c) {
     try {
       const r = await api.changeSenderCategory(emails, c)
-      get().toast({ level: 'info', message: r.message || 'Zmieniono kategorię', undo: r.undo })
+      get().toast({ level: 'info', message: r.message || t('Category changed'), undo: r.undo })
     } catch (e) {
       get().toast({ level: 'error', message: errorText(e) })
     }
@@ -350,7 +354,7 @@ export const useStore = create<State>((set, get) => ({
 
   async undo(token) {
     const ok = await api.undo(token)
-    get().toast({ level: ok ? 'success' : 'error', message: ok ? 'Cofnięto' : 'Nie da się już cofnąć' })
+    get().toast({ level: ok ? 'success' : 'error', message: ok ? t('Undone') : t('This can no longer be undone') })
     await get().refreshList(true)
     void get().refreshMeta()
   },
@@ -385,6 +389,7 @@ export const useStore = create<State>((set, get) => ({
 
   async updateSettings(p) {
     const s = await api.updateSettings(p)
+    if (p.language && syncLanguage(s.language)) return location.reload()
     set({ settings: s })
     applyTheme(s)
   },

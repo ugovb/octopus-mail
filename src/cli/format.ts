@@ -1,10 +1,12 @@
 import type { Address } from '../shared/types'
+import { t } from '../shared/i18n'
 import { getSettings } from '../core/settings'
 
-/** Local wall-clock time with an explicit UTC offset, e.g. "2026-10-13 10:30 +02:00". */
+/** Local wall-clock time with an explicit UTC offset, e.g. "2026-10-13 10:30 +02:00".
+ *  Deliberately locale-independent (ISO-like, parsed by agents and by isoLocal below), so not dateLocale(). */
 export function fmtTime(ts: number | null | undefined): string {
   if (!ts) return '-'
-  const tz = getSettings().timeZone || 'Europe/Warsaw'
+  const tz = getSettings().timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone
   const d = new Date(ts)
   const parts = new Intl.DateTimeFormat('sv-SE', {
     timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
@@ -37,7 +39,7 @@ export function trunc(s: string | null | undefined, n: number): string {
 }
 
 export function table(rows: Record<string, unknown>[], cols: { key: string; label: string; width?: number }[]): string {
-  if (!rows.length) return '(brak)'
+  if (!rows.length) return t('(none)')
   const widths = cols.map((c) => Math.min(c.width ?? 60, Math.max(c.label.length, ...rows.map((r) => String(r[c.key] ?? '').length))))
   const pad = (s: string, w: number) => (s.length > w ? s.slice(0, w - 1) + '…' : s.padEnd(w))
   const head = cols.map((c, i) => pad(c.label, widths[i])).join('  ')
