@@ -10,7 +10,7 @@ import type {
 import * as accounts from './accounts'
 import * as A from './actions'
 import * as ai from './ai/features'
-import { claudeModels, hasClaudeKey, hasOpenaiKey, ollamaModels, setClaudeKey, setOpenaiKey } from './ai/provider'
+import { claudeModels, hasClaudeKey, hasOpenaiKey, hasAnthropicCompatKey, ollamaModels, setClaudeKey, setOpenaiKey, setAnthropicCompatKey } from './ai/provider'
 import * as cal from './calendar'
 import { syncAllContacts } from './contacts-sync'
 import { all, get, inList, insert, now, run, update } from './db'
@@ -336,7 +336,7 @@ export function createService(actor: ServiceActor) {
     aiAsk: (q: string, onDelta?: (t: string) => void) => (need('read', 'any'), ai.askInbox(q, onDelta)),
     async aiStatus() {
       const s = getSettings().ai
-      return { provider: s.provider, ollamaModels: await ollamaModels(), claudeModels: claudeModels(), hasClaudeKey: hasClaudeKey(), hasOpenaiKey: hasOpenaiKey() }
+      return { provider: s.provider, ollamaModels: await ollamaModels(), claudeModels: claudeModels(), hasClaudeKey: hasClaudeKey(), hasOpenaiKey: hasOpenaiKey(), hasAnthropicCompatKey: hasAnthropicCompatKey() }
     },
     setClaudeKey: (key: string | null) => {
       if (agent) throw new AccessError(t('Only in the app.'))
@@ -345,6 +345,10 @@ export function createService(actor: ServiceActor) {
     setOpenaiKey: (key: string | null) => {
       if (agent) throw new AccessError(t('Only in the app.'))
       setOpenaiKey(key)
+    },
+    setAnthropicCompatKey: (key: string | null) => {
+      if (agent) throw new AccessError(t('Only in the app.'))
+      setAnthropicCompatKey(key)
     },
 
     // ---------- calendar ----------

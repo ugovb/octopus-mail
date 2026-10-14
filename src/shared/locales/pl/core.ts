@@ -57,6 +57,7 @@ const dict: Dictionary = {
     'No Claude API key — add it in Settings → AI.': 'Brak klucza Claude API — dodaj go w Ustawienia → AI.',
     'Set the API address and the model in Settings → AI.': 'Ustaw adres API i model w Ustawienia → AI.',
     'No API key — add it in Settings → AI.': 'Brak klucza API — dodaj go w Ustawienia → AI.',
+    'Set the URL, model and key in Settings → AI.': 'Ustaw adres, model i klucz w Ustawienia → AI.',
     'Invalid API key.': 'Nieprawidłowy klucz API.',
     'API rate limit or credit limit reached — try again later.': 'Osiągnięto limit zapytań lub kredytów API — spróbuj później.',
     'AI features are turned off (Settings → AI).': 'Funkcje AI są wyłączone (Ustawienia → AI).',

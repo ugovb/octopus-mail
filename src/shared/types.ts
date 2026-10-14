@@ -375,7 +375,7 @@ export interface AppSettings {
   launchAtLogin: boolean
   minimizeToTray: boolean
   ai: {
-    provider: 'ollama' | 'claude' | 'openai' | 'off'
+    provider: 'ollama' | 'claude' | 'openai' | 'anthropic-compat' | 'off'
     ollamaUrl: string
     ollamaModel: string
     ollamaEmbedModel: string
@@ -383,6 +383,9 @@ export interface AppSettings {
     /** any OpenAI-compatible endpoint (Mammouth, OpenRouter, LM Studio …): base URL ending in /v1 */
     openaiUrl: string
     openaiModel: string
+    /** any Anthropic-compatible endpoint (/v1/messages): base URL without the /v1/messages part */
+    anthropicCompatUrl: string
+    anthropicCompatModel: string
     smartCategorize: boolean
     autoSummaries: boolean
     replyLanguage: 'auto' | 'pl' | 'en'

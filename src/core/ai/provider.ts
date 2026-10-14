@@ -2,7 +2,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { t } from '../../shared/i18n'
 import type { AiResult } from '../../shared/types'
-import { claudeKeyName, openaiKeyName, getSecret, setSecret, deleteSecret } from '../secrets'
+import { anthropicCompatKeyName, claudeKeyName, openaiKeyName, getSecret, setSecret, deleteSecret } from '../secrets'
 import { getSettings } from '../settings'
 
 export interface ChatTurn {
@@ -19,7 +19,7 @@ export interface CompleteOptions {
   /** Claude effort level; small tasks (classification, quick replies) use 'low' */
   effort?: 'low' | 'medium' | 'high'
   signal?: AbortSignal
-  provider?: 'ollama' | 'claude' | 'openai'
+  provider?: 'ollama' | 'claude' | 'openai' | 'anthropic-compat'
 }
 
 export function claudeModels(): { id: string; label: string }[] {
@@ -55,7 +55,16 @@ export function hasOpenaiKey(): boolean {
   return !!getSecret(openaiKeyName)
 }
 
-export function activeProvider(): 'ollama' | 'claude' | 'openai' | 'off' {
+export function setAnthropicCompatKey(key: string | null): void {
+  if (key) setSecret(anthropicCompatKeyName, key.trim())
+  else deleteSecret(anthropicCompatKeyName)
+}
+
+export function hasAnthropicCompatKey(): boolean {
+  return !!getSecret(anthropicCompatKeyName)
+}
+
+export function activeProvider(): 'ollama' | 'claude' | 'openai' | 'anthropic-compat' | 'off' {
   return getSettings().ai.provider
 }
 
@@ -64,6 +73,7 @@ export async function complete(opts: CompleteOptions): Promise<AiResult> {
   if (provider === 'off') throw new Error(t('AI features are turned off (Settings → AI).'))
   if (provider === 'claude') return completeClaude(opts)
   if (provider === 'openai') return completeOpenai(opts)
+  if (provider === 'anthropic-compat') return completeAnthropicCompat(opts)
   return completeOllama(opts)
 }
 
@@ -101,6 +111,43 @@ async function completeClaude(opts: CompleteOptions): Promise<AiResult> {
     .map((b) => b.text)
     .join('')
   return { text, provider: 'claude', model: message.model }
+}
+
+/** Third-party Anthropic-compatible servers: plain messages API only (no betas, output_config or fallbacks). */
+async function completeAnthropicCompat(opts: CompleteOptions): Promise<AiResult> {
+  const s = getSettings().ai
+  // the SDK appends /v1/messages itself, so drop a trailing /v1
+  const base = s.anthropicCompatUrl.trim().replace(/\/+$/, '').replace(/\/v1$/, '')
+  const model = s.anthropicCompatModel.trim()
+  const key = getSecret(anthropicCompatKeyName)
+  if (!base || !model || !key) throw new Error(t('Set the URL, model and key in Settings → AI.'))
+  const client = new Anthropic({ apiKey: key, baseURL: base })
+  const params = {
+    model,
+    max_tokens: opts.maxTokens ?? 2048,
+    system: opts.json ? `${opts.system}\n\nRespond with JSON only, no other text.` : opts.system,
+    messages: opts.messages,
+  }
+  let message: Anthropic.Message
+  try {
+    if (opts.onDelta) {
+      const stream = client.messages.stream(params, { signal: opts.signal })
+      stream.on('text', (delta) => opts.onDelta!(delta))
+      message = await stream.finalMessage()
+    } else {
+      message = await client.messages.create(params, { signal: opts.signal })
+    }
+  } catch (e) {
+    if (e instanceof Anthropic.AuthenticationError) throw new Error(t('Invalid API key.'))
+    if (e instanceof Anthropic.RateLimitError) throw new Error(t('API rate limit or credit limit reached — try again later.'))
+    if (e instanceof Anthropic.APIError) throw new Error(`API (${e.status}): ${e.message}`)
+    throw e
+  }
+  const text = message.content
+    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+    .map((b) => b.text)
+    .join('')
+  return { text: stripThink(text), provider: 'anthropic-compat', model: message.model || model }
 }
 
 /** OpenAI-compatible chat completions (Mammouth, OpenRouter, LM Studio, …). */

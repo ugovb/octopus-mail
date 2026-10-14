@@ -26,6 +26,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
     claudeModel: 'claude-opus-5-5',
     openaiUrl: '',
     openaiModel: '',
+    anthropicCompatUrl: '',
+    anthropicCompatModel: '',
     smartCategorize: false,
     autoSummaries: false,
     replyLanguage: 'auto',
