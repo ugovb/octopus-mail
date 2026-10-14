@@ -205,6 +205,8 @@ const dict: Dictionary = {
     'OpenAI-compatible API': 'API zgodne z OpenAI',
     'Anthropic-compatible API (custom address)': 'API zgodne z Anthropic (własny adres)',
     'Anthropic-compatible API': 'API zgodne z Anthropic',
+    'Used by default': 'Używany domyślnie',
+    'Use by default': 'Użyj domyślnie',
     'For services that offer the Anthropic messages API under their own address. The key is stored {where}. Email content is sent to that service.': 'Dla usług oferujących API wiadomości Anthropic pod własnym adresem. Klucz jest przechowywany {where}. Treść poczty jest wysyłana do tej usługi.',
     'Base address without /v1/messages, as given in the service documentation.': 'Adres bazowy bez /v1/messages, zgodnie z dokumentacją usługi.',
     'Works with Mammouth, OpenRouter, LM Studio and any service with a /chat/completions endpoint. The key is stored {where}. Email content is sent to that service.': 'Działa z Mammouth, OpenRouter, LM Studio i każdą usługą z punktem /chat/completions. Klucz jest przechowywany {where}. Treść poczty jest wysyłana do tej usługi.',
